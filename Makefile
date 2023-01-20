@@ -5,6 +5,7 @@ XBINDIR:=$(XDIR)/bin
 CC:=$(XBINDIR)/$(TRIPLE)-gcc
 OBJCOPY:=$(XBINDIR)/$(TRIPLE)-objcopy
 OBJDUMP:=$(XBINDIR)/$(TRIPLE)-objdump
+OUTPUT := build
 
 # COMPILE OPTIONS
 WARNINGS=-Wall -Wextra -Wpedantic -Wno-unused-const-variable
@@ -18,26 +19,29 @@ LDFLAGS:=-Wl,-nmagic -Wl,-Tlinker.ld
 # Source files and include dirs
 SOURCES := $(wildcard *.c) $(wildcard *.S)
 # Create .o and .d files for every .cc and .S (hand-written assembly) file
-OBJECTS := $(patsubst %.c, %.o, $(patsubst %.S, %.o, $(SOURCES)))
-DEPENDS := $(patsubst %.c, %.d, $(patsubst %.S, %.d, $(SOURCES)))
+OBJECTS := $(patsubst %, $(OUTPUT)/%, $(patsubst %.c, %.o, $(patsubst %.S, %.o, $(SOURCES))))
+DEPENDS := $(patsubst %, $(OUTPUT)/%, $(patsubst %.c, %.d, $(patsubst %.S, %.d, $(SOURCES))))
 
 # The first rule is the default, ie. "make", "make all" and "make kernel8.img" mean the same
-all: kernel8.img
+all: $(OUTPUT) $(OUTPUT)/kernel8.img
+
+$(OUTPUT):
+	mkdir -p $(OUTPUT)
 
 clean:
-	rm -f $(OBJECTS) $(DEPENDS) kernel8.elf kernel8.img
+	rm -rf $(OUTPUT)
 
-kernel8.img: kernel8.elf
+$(OUTPUT)/kernel8.img: $(OUTPUT)/kernel8.elf
 	$(OBJCOPY) $< -O binary $@
 
-kernel8.elf: $(OBJECTS) linker.ld
+$(OUTPUT)/kernel8.elf: $(OBJECTS) linker.ld
 	$(CC) $(CFLAGS) $(filter-out %.ld, $^) -o $@ $(LDFLAGS)
-	@$(OBJDUMP) -d kernel8.elf | fgrep -q q0 && printf "\n***** WARNING: SIMD INSTRUCTIONS DETECTED! *****\n\n" || true
+	@$(OBJDUMP) -d $(OUTPUT)/kernel8.elf | fgrep -q q0 && printf "\n***** WARNING: SIMD INSTRUCTIONS DETECTED! *****\n\n" || true
 
-%.o: %.c Makefile
+$(OUTPUT)/%.o: %.c Makefile
 	$(CC) $(CFLAGS) -MMD -MP -c $< -o $@
 
-%.o: %.S Makefile
+$(OUTPUT)/%.o: %.S Makefile
 	$(CC) $(CFLAGS) -MMD -MP -c $< -o $@
 
 -include $(DEPENDS)
