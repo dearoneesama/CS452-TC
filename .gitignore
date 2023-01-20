@@ -1,0 +1,9 @@
+*.d
+*.o
+*.elf
+*.img
+*.out
+
+.vscode
+.idea
+.DS_Store
