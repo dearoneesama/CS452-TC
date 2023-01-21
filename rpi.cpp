@@ -1,4 +1,4 @@
-#include "rpi.h"
+#include "rpi.hpp"
 
 struct GPIO {
   uint32_t GPFSEL[6];
@@ -289,13 +289,13 @@ void uart_puts(size_t spiChannel, size_t uartChannel, const char* buf, size_t bl
 }
 
 // define our own memset to avoid SIMD instructions emitted from the compiler
-void *memset(void *s, int c, size_t n) {
+extern "C" void *memset(void *s, int c, size_t n) {
   for (char* it = (char*)s; n > 0; --n) *it++ = c;
   return s;
 }
 
 // define our own memcpy to avoid SIMD instructions emitted from the compiler
-void* memcpy(void* restrict dest, const void* restrict src, size_t n) {
+extern "C" void* memcpy(void* __restrict__ dest, const void* __restrict__ src, size_t n) {
     char* sit = (char*)src;
     char* cdest = (char*)dest;
     for (size_t i = 0; i < n; ++i) *(cdest++) = *(sit++);

@@ -66,6 +66,18 @@ el1_entry:
     msr SPSel, #1
     ldr     x0, =stackend
     mov     sp, x0
+
+    // Clean the BSS section
+    // https://www.rpi4os.com/part1-bootstrapping/
+    ldr     x1, =__bss_start     // Start address
+    ldr     w2, =__bss_size      // Size of the section
+bss_loop:
+    cbz     w2, bss_loop_end     // Quit loop if zero
+    str     xzr, [x1], #8
+    sub     w2, w2, #1
+    cbnz    w2, bss_loop         // Loop if non-zero
+
+bss_loop_end:
     // Jump to our main() routine in C++ (make sure it doesn't return)
     bl      main
 
