@@ -79,7 +79,7 @@ bss_loop:
 
 bss_loop_end:
     // Jump to our main() routine in C++ (make sure it doesn't return)
-    bl      main
+    bl      kmain
 
     // use watchdog to reboot
     mov x2, 36
