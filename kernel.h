@@ -1,9 +1,10 @@
 #pragma once
+#include <stdint.h>
 
-int kernal_sys_call();
+extern "C" int kernal_sys_call();
 
-int activate(int spsr, void (*elr)(), int* sp_el0);
+extern "C" int activate(int spsr, void (*elr)(), uint64_t* sp_el0);
 
-int* make_stack();
+extern "C" int* make_stack();
 
-int initialize(int i);
+extern "C" void initialize_kernel();

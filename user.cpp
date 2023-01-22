@@ -1,6 +1,6 @@
 #include "user.h"
 
-#include "rpi.h"
+#include "rpi.hpp"
 #include "user_syscall.h"
 
 void first_user_function() {

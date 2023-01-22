@@ -80,13 +80,11 @@ load_context:
     MRS x0, ESR_EL1
     ret
 
-.global initialize
+.global initialize_kernel
 .balign 16
-initialize:
-    str x0, [sp, #-16]!
+initialize_kernel:
     ldr x0, =vector_table_tabl_el1
     MSR VBAR_EL1, x0
-    ldr x0, [sp], #16
     ret
 
 .global vector_table_tabl_el1
@@ -133,11 +131,4 @@ vector_table_tabl_el1:
 .balign 16
 my_sys_call:
     svc 1
-    ret
-
-.global make_stack
-.balign 16
-make_stack:
-    add sp, sp, #512
-    mov x0, sp
     ret

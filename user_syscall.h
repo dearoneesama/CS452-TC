@@ -1,3 +1,3 @@
 #pragma once
 
-int my_sys_call();
+extern "C" int my_sys_call();

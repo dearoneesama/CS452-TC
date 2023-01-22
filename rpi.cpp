@@ -134,7 +134,6 @@ static const uint32_t SPI_STAT_RX_EMPTY     = 0x00000080;
 static const uint32_t SPI_STAT_BUSY         = 0x00000040;
 static const uint32_t SPI_STAT_BIT_CNT_MASK = 0x0000003F;
 
-
 void init_spi(uint32_t channel) {
   uint32_t reg = aux->ENABLES;
   reg |= (2 << channel);
@@ -240,11 +239,11 @@ static void uart_init_channel(size_t spiChannel, size_t uartChannel, size_t baud
   // set baud rate
   uart_write_register(spiChannel, uartChannel, UART_LCR, UART_LCR_DIV_LATCH_EN);
   uint32_t bauddiv = 14745600 / (baudRate * 16);
-  uart_write_register(spiChannel, uartChannel, UART_DLH, (bauddiv & 0xFF00) >> 4);
+  uart_write_register(spiChannel, uartChannel, UART_DLH, (bauddiv & 0xFF00) >> 8);
   uart_write_register(spiChannel, uartChannel, UART_DLL, (bauddiv & 0x00FF));
 
   // set serial byte configuration: 8 bit, no parity, 1 stop bit
-  uart_write_register(spiChannel, uartChannel, UART_LCR, 0x3);
+  uart_write_register(spiChannel, uartChannel, UART_LCR, uartChannel == 0 ? 0x3 : 0x7);
 
   // clear and enable fifos, (wait since clearing fifos takes time)
   uart_write_register(spiChannel, uartChannel, UART_FCR, UART_FCR_RX_FIFO_RESET | UART_FCR_TX_FIFO_RESET | UART_FCR_FIFO_EN);
@@ -285,6 +284,22 @@ void uart_puts(size_t spiChannel, size_t uartChannel, const char* buf, size_t bl
       if (tlen > max) tlen = max;
       tidx = 1;
     }
+  }
+}
+
+void uart_putui64(size_t spiChannel, size_t uartChannel, uint64_t n) {
+  if (n == 0) {
+    uart_putc(spiChannel, uartChannel, '0');
+    return;
+  }
+  char digits[64];
+  int len = 0;
+  while (n != 0) {
+    digits[len++] = n % 10;
+    n /= 10;
+  }
+  for (--len; len >= 0; --len) {
+    uart_putc(spiChannel, uartChannel, '0' + digits[len]);
   }
 }
 
