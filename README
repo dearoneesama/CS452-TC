@@ -13,10 +13,16 @@ problem outside regular business hours.
 Build and Run (linux.student.cs.uwaterloo.ca)
 =============
 
-cp -a /u/cs452/public/iotest <dest>
-cd <dest>
+git clone --recurse-submodules https://git.uwaterloo.ca/jx3yang/cs452-project
+cd CS452-Project
 make
-/u/cs452/public/tools/setupTFTP.sh <barcode> kernel8.img
+/u/cs452/public/tools/setupTFTP.sh <barcode> build/kernel8.img
+
+To run unit tests
+=================
+cd unittesting
+make run
+
 # reboot RPi
 
 
