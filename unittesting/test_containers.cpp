@@ -48,10 +48,13 @@ TEST_CASE("free list usage", "[containers]") {
 
   SECTION("alloc full and shrink to zero do not crash") {
     test_elem *elems[5];
-    for (int i = 0; i < 5; ++i) {
+    for (size_t i = 0; i < 5; ++i) {
       elems[i] = fl.allocate(i);
     }
-    for (int i = 0; i < 5; ++i) {
+    for (size_t i = 0; i < 5; ++i) {
+      REQUIRE(fl.index_of(elems[i]) == i);
+    }
+    for (size_t i = 0; i < 5; ++i) {
       fl.free(elems[i]);
     }
     REQUIRE(fl.num_allocated() == 0);

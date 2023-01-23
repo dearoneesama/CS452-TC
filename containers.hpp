@@ -14,7 +14,7 @@ namespace troll {
    * the pointer is invalid and free to use in other intrusive containers.
   */
   template<class T, size_t Capacity, class Link = forward_link>
-  class alignas(8) free_list {
+  class free_list {
   public:
     using value_type = T;
     using size_type = size_t;
@@ -26,13 +26,10 @@ namespace troll {
 
     static constexpr auto capacity = Capacity;
 
-    constexpr free_list()
-      : num_allocated_{0}
-      , head{reinterpret_cast<pointer>(buffer)}
-      , last{reinterpret_cast<pointer>(buffer) + Capacity - 1} {
-      for (size_t i = 0; i < capacity - 1; ++i) {
+    constexpr free_list() {
+      for (size_t i = 0; i < capacity; ++i) {
         auto space = reinterpret_cast<pointer>(buffer + i * sizeof(T));
-        static_cast<link_type *>(space)->etl_next = space + 1;
+        queue.push(*space);
       }
     }
 
@@ -44,46 +41,44 @@ namespace troll {
      * using args.
     */
     template<class ...Args>
-    pointer allocate(Args &&...args) noexcept {
-      if (num_allocated_ == capacity) {
+    pointer allocate(Args &&...args) {
+      if (num_allocated() == capacity) {
         __builtin_unreachable();
       }
-      auto *prev_next = head->etl_next;
-      pointer space = new (head) T(std::forward<Args>(args)...);
-      head = prev_next;
-      ++num_allocated_;
-      return space;
+      pointer space = &queue.front();
+      queue.pop();
+      space = new (space) T(std::forward<Args>(args)...);
     }
 
     /**
      * deallocate this object.
     */
-    void free(link_type *ptr) noexcept {
+    void free(link_type *ptr) {
       if (!in_my_buffer(ptr)) {
         return;
       }
       static_cast<pointer>(ptr)->~T();
-      if (num_allocated_ == capacity) {
-        head = last = ptr;
-      } else {
-        last->etl_next = ptr;
-        last = ptr;
-      }
-      --num_allocated_;
+      queue.push(*ptr);
     }
 
     bool in_my_buffer(void *ptr) noexcept {
       return ptr >= buffer && ptr < buffer + capacity * sizeof(T);
     }
 
-    size_t num_allocated() const {
-      return num_allocated_;
+    /**
+     * relative index (unique) of the object in the buffer.
+    */
+    size_type index_of(link_type *ptr) noexcept {
+      return (reinterpret_cast<uintptr_t>(ptr) - reinterpret_cast<uintptr_t>(buffer)) / sizeof(T);
+    }
+
+    size_type num_allocated() const {
+      return capacity - queue.size();
     }
 
   private:
     char buffer[capacity * sizeof(T)];
-    size_type num_allocated_;
-    link_type *head, *last;
+    etl::intrusive_queue<T, Link> queue;
   };
 
   /**
