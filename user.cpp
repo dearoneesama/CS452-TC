@@ -8,7 +8,7 @@ void other_task() {
   int tid = MyTid();
   int ptid = MyParentTid();
   char buffer[50];
-  auto len = troll::sformat(buffer, "My TID is {} and my parent's TID is {}\r\n", tid, ptid);
+  auto len = troll::snformat(buffer, "My TID is {} and my parent's TID is {}\r\n", tid, ptid);
   uart_puts(0, 0, buffer, len);
   Yield();
   uart_puts(0, 0, buffer, len);
@@ -34,15 +34,15 @@ void first_user_task() {
 
   // lower priority, meaning lower n in Ln
   int task_1 = Create(PRIORITY_L1, other_task);
-  uart_puts(0, 0, buffer, troll::sformat(buffer, format, task_1));
+  uart_puts(0, 0, buffer, troll::snformat(buffer, format, task_1));
   int task_2 = Create(PRIORITY_L1, other_task);
-  uart_puts(0, 0, buffer, troll::sformat(buffer, format, task_2));
+  uart_puts(0, 0, buffer, troll::snformat(buffer, format, task_2));
 
   // higher priority, meaning higher n in Ln
   int task_3 = Create(PRIORITY_L4, other_task);
-  uart_puts(0, 0, buffer, troll::sformat(buffer, format, task_3));
+  uart_puts(0, 0, buffer, troll::snformat(buffer, format, task_3));
   int task_4 = Create(PRIORITY_L4, other_task);
-  uart_puts(0, 0, buffer, troll::sformat(buffer, format, task_4));
+  uart_puts(0, 0, buffer, troll::snformat(buffer, format, task_4));
 
   uart_puts(0, 0, "FirstUserTask: exiting\r\n", 24);
   Exit();
