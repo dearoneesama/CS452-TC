@@ -1,0 +1,8 @@
+#pragma once
+
+#define SYSCALLN_CREATE				1
+#define SYSCALLN_MYTID				2
+#define SYSCALLN_MYPARENTTID	3
+#define SYSCALLN_YIELD				4
+#define SYSCALLN_EXIT					5
+#define SYSCALLN_INVALID			(SYSCALLN_EXIT + 1)
