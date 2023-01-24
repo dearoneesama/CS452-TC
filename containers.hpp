@@ -47,7 +47,7 @@ namespace troll {
       }
       pointer space = &queue.front();
       queue.pop();
-      space = new (space) T(std::forward<Args>(args)...);
+      return new (space) T(std::forward<Args>(args)...);
     }
 
     /**

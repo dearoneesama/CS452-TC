@@ -11,7 +11,7 @@ ETL_INCLUDE:=thirdparty/etl/include
 
 # COMPILE OPTIONS
 WARNINGS=-Wall -Wextra -Wpedantic -Wno-unused-const-variable
-CFLAGS:=-g -pipe -static $(WARNINGS) -ffreestanding -nostartfiles \
+CFLAGS:=-O1 -pipe -static $(WARNINGS) -ffreestanding -nostartfiles \
 	-mcpu=$(ARCH) -static-pie -mstrict-align -fno-builtin -mgeneral-regs-only \
 	-fno-rtti -fno-exceptions -nostdlib -lgcc -std=gnu++17 -I $(ETL_INCLUDE)
 
