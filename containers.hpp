@@ -76,6 +76,13 @@ namespace troll {
       return capacity - queue.size();
     }
 
+    pointer at(size_t index) noexcept {
+      if (index >= capacity) {
+        return nullptr;
+      }
+      return reinterpret_cast<pointer>(buffer + index * sizeof(T));
+    }
+
   private:
     char buffer[capacity * sizeof(T)];
     etl::intrusive_queue<T, Link> queue;
@@ -156,6 +163,45 @@ namespace troll {
 
   private:
     etl::intrusive_queue<T, Link> queues[num_priorities];
+    size_type size_ = 0;
+  };
+
+  template<class T, class Link = forward_link>
+  class queue {
+  public:
+    using value_type = T;
+    using size_type = size_t;
+    using pointer = value_type *;
+    using const_pointer = const value_type *;
+    using reference = value_type &;
+    using const_reference = const value_type &;
+    using link_type = Link;
+
+    constexpr queue() = default;
+    queue(queue &) = delete;
+
+    size_type size() const {
+      return size_;
+    }
+
+    void push(link_type& value) {
+      intrusive_queue.push(value);
+      ++size_;
+    }
+
+    reference pop() {
+      reference item = intrusive_queue.front();
+      intrusive_queue.pop();
+      --size_;
+      return item;
+    }
+
+    bool empty() const {
+      return size() == 0;
+    }
+
+  private:
+    etl::intrusive_queue<T, Link> intrusive_queue;
     size_type size_ = 0;
   };
 }

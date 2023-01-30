@@ -9,6 +9,9 @@ namespace kernel {
     Active,  // currently running
     Ready,   // can be run
     Blocked, // waiting on something
+    SendWait,    // sender waiting on receiver
+    ReceiveWait, // receiver waiting on sender
+    ReplyWait,   // sender waiting on reply
   };
 
   // Align everything to 64bit for easier time on the assembler side
@@ -51,6 +54,9 @@ namespace kernel {
     void k_my_tid(task_descriptor *curr_task);
     void k_my_parent_tid(task_descriptor *curr_task);
     void k_yield(task_descriptor *curr_task);
+    void k_send(task_descriptor *curr_task);
+    void k_receive(task_descriptor *curr_task);
+    void k_reply(task_descriptor *curr_task);
     void k_exit(task_descriptor *curr_task);
 
   private:
@@ -60,9 +66,10 @@ namespace kernel {
     troll::free_list<task_descriptor, MAX_NUM_TASKS> allocator;
     // ready tasks
     troll::intrusive_priority_scheduling_queue<task_descriptor, NUM_PRIORITIES> ready;
-
     // this keeps track of the reuse stats of each task descriptor
     // useful for determining whether a parent task has already exited
     task_reuse_status task_reuse_statuses[MAX_NUM_TASKS];
+    // mailboxes for message passing
+    troll::queue<task_descriptor> mailboxes[MAX_NUM_TASKS];
   };
 }  // namespace kernel

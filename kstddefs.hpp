@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstddef>
+#include <cstdint>
 
 // tasking configurations
 using tid_t = uint32_t;

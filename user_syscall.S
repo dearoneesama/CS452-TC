@@ -24,6 +24,24 @@ Yield:
     svc SYSCALLN_YIELD
     ret
 
+.global Send
+.balign 16
+Send:
+    svc SYSCALLN_SEND
+    ret
+
+.global Receive
+.balign 16
+Receive:
+    svc SYSCALLN_RECEIVE
+    ret
+
+.global Reply
+.balign 16
+Reply:
+    svc SYSCALLN_REPLY
+    ret
+
 .global Exit
 .balign 16
 Exit:

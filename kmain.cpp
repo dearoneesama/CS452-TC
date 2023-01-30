@@ -29,7 +29,7 @@ int main() {
 
   // spawn first task
   auto *current_task = task_manager.new_task(KERNEL_TID, 1, PRIORITY_L3);
-  current_task->context.registers[0] = reinterpret_cast<int64_t>(first_user_task);
+  current_task->context.registers[0] = reinterpret_cast<int64_t>(k2_user_task);
   current_task->context.exception_lr = reinterpret_cast<uint64_t>(task_wrapper);
   task_manager.ready_push(current_task);
 
@@ -54,6 +54,18 @@ int main() {
       }
       case SYSCALLN_YIELD: {
         task_manager.k_yield(current_task);
+        break;
+      }
+      case SYSCALLN_SEND: {
+        task_manager.k_send(current_task);
+        break;
+      }
+      case SYSCALLN_RECEIVE: {
+        task_manager.k_receive(current_task);
+        break;
+      }
+      case SYSCALLN_REPLY: {
+        task_manager.k_reply(current_task);
         break;
       }
       case SYSCALLN_EXIT: {

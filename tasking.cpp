@@ -3,6 +3,44 @@
 
 using namespace kernel;
 
+namespace {
+void copy_to(char* dest, const char* src, size_t n) {
+  for (size_t i = 0; i < n; ++i) {
+    *(dest++) = *(src++);
+  }
+}
+
+void send_message(task_descriptor* sender, task_descriptor* receiver) {
+  tid_t sender_tid = sender->tid;
+  const char* src = reinterpret_cast<const char*>(sender->context.registers[1]);
+  size_t srclen = sender->context.registers[2];
+
+  tid_t* tid = reinterpret_cast<tid_t*>(receiver->context.registers[0]);
+  char* dest = reinterpret_cast<char*>(receiver->context.registers[1]);
+  size_t destlen = sender->context.registers[2];
+
+  size_t n = srclen > destlen ? destlen : srclen;
+  copy_to(dest, src, n);
+  *tid = sender_tid;
+  receiver->context.registers[0] = n;
+  sender->state = task_state_t::ReplyWait;
+}
+
+void reply_message(task_descriptor* sender, task_descriptor *replier) {
+  const char* src = reinterpret_cast<const char*>(replier->context.registers[1]);
+  size_t srclen = replier->context.registers[2];
+
+  char* dest = reinterpret_cast<char *>(sender->context.registers[3]);
+  size_t destlen = sender->context.registers[4];
+
+  size_t n = srclen > destlen ? destlen : srclen;
+  copy_to(dest, src, n);
+
+  replier->context.registers[0] = n;
+  sender->context.registers[0] = n;
+}
+}; // namespace
+
 task_descriptor *task_manager::new_task(tid_t parent_tid, size_t parent_generation, priority_t priority, task_state_t state) {
   auto *task = allocator.allocate();
   auto i = allocator.index_of(task);
@@ -91,4 +129,62 @@ void task_manager::k_exit(task_descriptor *curr_task) {
   task_reuse_statuses[curr_task->tid - STARTING_TASK_TID].free = 1;
   curr_task->state = task_state_t::Free; // not needed but for good measures
   allocator.free(curr_task);
+}
+
+void task_manager::k_send(task_descriptor *curr_task) {
+  tid_t target_tid = curr_task->context.registers[0];
+
+  // SRR cannot be completed, a task cannot send itself a message
+  if (target_tid == curr_task->tid) {
+    curr_task->context.registers[0] = -2;
+    ready_push(curr_task);
+    return;
+  }
+
+  task_descriptor* target_task = allocator.at(target_tid - STARTING_TASK_TID);
+  if (!target_task) { // invalid tid
+    curr_task->context.registers[0] = -1;
+    ready_push(curr_task);
+    return;
+  }
+
+  if (target_task->state == task_state_t::ReceiveWait) {
+    send_message(curr_task, target_task);
+    ready_push(target_task);
+    return;
+  }
+
+  curr_task->state = task_state_t::SendWait;
+  mailboxes[target_tid - STARTING_TASK_TID].push(*curr_task);
+}
+
+void task_manager::k_receive(task_descriptor *curr_task) {
+  if (!mailboxes[curr_task->tid - STARTING_TASK_TID].empty()) {
+    task_descriptor *sender_task = &(mailboxes[curr_task->tid - STARTING_TASK_TID].pop());
+    send_message(sender_task, curr_task);
+    ready_push(curr_task);
+    return;
+  }
+
+  curr_task->state = task_state_t::ReceiveWait;
+}
+
+void task_manager::k_reply(task_descriptor *curr_task) {
+  tid_t sender_tid = curr_task->context.registers[0];
+  task_descriptor* sender_task = allocator.at(sender_tid - STARTING_TASK_TID);
+  if (!sender_task) {
+    curr_task->context.registers[0] = -1;
+    ready_push(curr_task);
+    return;
+  }
+
+  if (sender_task->state != task_state_t::ReplyWait) {
+    curr_task->context.registers[0] = -2;
+    ready_push(curr_task);
+    return;
+  }
+
+  reply_message(sender_task, curr_task);
+  ready_push(sender_task);
+  ready_push(curr_task);
 }

@@ -5,3 +5,5 @@
 */
 void task_wrapper(void (*the_task)());
 void first_user_task();
+
+void k2_user_task();
