@@ -29,13 +29,19 @@ namespace kernel {
     task_descriptor() = default;
   };
 
+  struct task_reuse_status {
+    size_t parent_gen = 0;
+    size_t gen = 0;
+    bool free = 1;
+  };
+
   class task_manager {
   public:
     task_manager() = default;
     task_manager(task_manager &) = delete;
 
     // allocate a task. its tid is created automatically, but do not run it.
-    task_descriptor *new_task(tid_t parent_tid, priority_t priority, task_state_t state = task_state_t::Ready);
+    task_descriptor *new_task(tid_t parent_tid, size_t parent_generation, priority_t priority, task_state_t state = task_state_t::Ready);
     // get a runnable stack, or nullptr
     task_descriptor *get_task();
     void ready_push(task_descriptor *task);
@@ -54,5 +60,9 @@ namespace kernel {
     troll::free_list<task_descriptor, MAX_NUM_TASKS> allocator;
     // ready tasks
     troll::intrusive_priority_scheduling_queue<task_descriptor, NUM_PRIORITIES> ready;
+
+    // this keeps track of the reuse stats of each task descriptor
+    // useful for determining whether a parent task has already exited
+    task_reuse_status task_reuse_statuses[MAX_NUM_TASKS];
   };
 }  // namespace kernel

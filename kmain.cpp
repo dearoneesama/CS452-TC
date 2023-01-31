@@ -28,9 +28,9 @@ int main() {
   uart_puts(0, 0, SC_CLRSCR, LEN_LITERAL(SC_CLRSCR));
 
   // spawn first task
-  auto *current_task = task_manager.new_task(1, PRIORITY_L3);
-  current_task->context.registers[0] = 452;  // this is only for debugging
-  current_task->context.exception_lr = reinterpret_cast<uint64_t>(first_user_task);
+  auto *current_task = task_manager.new_task(KERNEL_TID, 1, PRIORITY_L3);
+  current_task->context.registers[0] = reinterpret_cast<int64_t>(first_user_task);
+  current_task->context.exception_lr = reinterpret_cast<uint64_t>(task_wrapper);
   task_manager.ready_push(current_task);
 
   uint32_t esr_el1, request;
@@ -61,6 +61,7 @@ int main() {
         break;
       }
       default: {
+        // in case the kernel does not recognize the request, print it and return
         uart_puts(0, 0, "Got request: ", 13);
         for (int i = 0; i < 32; ++i) {
           uart_putc(0, 0, '0' + (esr_el1 & 1));

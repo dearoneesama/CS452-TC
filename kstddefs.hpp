@@ -22,7 +22,12 @@ static constexpr size_t MAX_NUM_TASKS = 50;
 
 static constexpr size_t SP_ALIGNMENT = 16;
 
+static constexpr tid_t KERNEL_TID = 1;
+static constexpr tid_t STARTING_TASK_TID = 2;
+
 static_assert(!(TASK_STACK_SIZE % SP_ALIGNMENT));
+
+#define EXITED_PARENT_MASK (1 << 31)
 
 #include "user_syscall.include"
 
