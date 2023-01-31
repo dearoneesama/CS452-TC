@@ -1,4 +1,8 @@
-XDIR:=/u/cs452/public/xdev
+ifeq ($(JIXI_LOCAL), 1)
+	XDIR:=~/Projects/cs452-project/arm-gnu-toolchain-12.2.rel1-darwin-x86_64-aarch64-none-elf
+else
+	XDIR:=/u/cs452/public/xdev
+endif
 ARCH=cortex-a72
 TRIPLE=aarch64-none-elf
 XBINDIR:=$(XDIR)/bin

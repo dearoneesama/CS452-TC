@@ -8,11 +8,16 @@ void other_task() {
   int tid = MyTid();
   int ptid = MyParentTid();
   char buffer[50];
-  auto len = troll::snformat(buffer, "My TID is {} and my parent's TID is {}\r\n", tid, ptid);
+  size_t len = 0;
+
+  if (ptid & EXITED_PARENT_MASK) {
+    len = troll::snformat(buffer, "My TID is {} and my exited parent's TID was {}\r\n", tid, ptid - EXITED_PARENT_MASK);
+  } else {
+    len = troll::snformat(buffer, "My TID is {} and my parent's TID is {}\r\n", tid, ptid);
+  }
   uart_puts(0, 0, buffer, len);
   Yield();
   uart_puts(0, 0, buffer, len);
-  Exit();
 }
 
 /**
@@ -45,5 +50,9 @@ void first_user_task() {
   uart_puts(0, 0, buffer, troll::snformat(buffer, format, task_4));
 
   uart_puts(0, 0, "FirstUserTask: exiting\r\n", 24);
+}
+
+void task_wrapper(void (*the_task)()) {
+  the_task();
   Exit();
 }

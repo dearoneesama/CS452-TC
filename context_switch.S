@@ -181,6 +181,8 @@ initialize_kernel:
     MSR VBAR_EL1, x0
     ret
 
+// Follows the sample vector exception table given by
+// https://developer.arm.com/documentation/100933/0100/AArch64-exception-vector-table
 .global vector_exception_table
 .balign 0x800
 vector_exception_table:
