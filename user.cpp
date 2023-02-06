@@ -5,6 +5,8 @@
 #include "format.hpp"
 #include "servers.hpp"
 
+namespace k1 {
+
 void other_task() {
   int tid = MyTid();
   int ptid = MyParentTid();
@@ -53,34 +55,38 @@ void first_user_task() {
   uart_puts(0, 0, "FirstUserTask: exiting\r\n", 24);
 }
 
+}  // namespace k1
+
 void task_wrapper(void (*the_task)()) {
   the_task();
   Exit();
 }
 
-void k2_child_task() {
+namespace k2 {
+
+void test_child_task() {
   uart_puts(0, 0, "Hello from child\r\n", 18);
 
-  RegisterAs("k2-child-task\0");
+  RegisterAs("k2-child-task");
   int tid = MyTid();
   int ptid = MyParentTid();
   if (ptid & EXITED_PARENT_MASK) {
     ptid -= EXITED_PARENT_MASK;
   }
 
-  if (WhoIs("k2-user-task\0") != ptid) {
+  if (WhoIs("k2-user-task") != ptid) {
     uart_puts(0, 0, "Failed lookup of k2-user-task...\r\n", 34);
     return;
   }
 
-  if (WhoIs("k2-child-task\0") != tid) {
+  if (WhoIs("k2-child-task") != tid) {
     uart_puts(0, 0, "Failed lookup of k2-child-task...\r\n", 35);
     return;
   }
 
   // now overwrite registration
-  RegisterAs("k2-user-task\0");
-  if (WhoIs("k2-user-task\0") != tid) {
+  RegisterAs("k2-user-task");
+  if (WhoIs("k2-user-task") != tid) {
     uart_puts(0, 0, "Failed lookup of k2-user-task after overwrite...\r\n", 50);
     return;
   }
@@ -89,15 +95,15 @@ void k2_child_task() {
   return;
 }
 
-void k2_user_task() {
+void test_user_task() {
   int nameserver_task = Create(PRIORITY_L5, nameserver);
-  Create(PRIORITY_L1, k2_child_task);
+  Create(PRIORITY_L1, test_child_task);
   char buffer[32];
   uart_puts(0, 0, buffer, troll::snformat(buffer, "Nameserver TID: {}\r\n", nameserver_task));
 
-  int err = RegisterAs("k2-user-task\0");
+  int err = RegisterAs("k2-user-task");
   if (!err) {
-    int resp = WhoIs("k2-user-task\0");
+    int resp = WhoIs("k2-user-task");
     if (resp != 2) {
       uart_puts(0, 0, buffer, troll::snformat(buffer, "Got this: {}\r\n", resp));
       return;
@@ -109,3 +115,72 @@ void k2_user_task() {
     return;
   }
 }
+
+etl::string_view message_to_rpc(char m) {
+  switch (static_cast<RPC_MESSAGE>(m)) {
+    case RPC_MESSAGE::PAPER:
+      return "paper";
+    case RPC_MESSAGE::ROCK:
+      return "rock";
+    case RPC_MESSAGE::SCISSORS:
+      return "scissors";
+    default:
+      return "unknown";
+  }
+}
+
+void rpc_other_user_task() {
+  auto rpc_server = WhoIs("rpcserver");
+  auto tid = MyTid();
+  char reply;
+  while (1) {
+    loop:
+    // play two rounds and quit
+    auto message = static_cast<char>(RPC_MESSAGE::SIGNUP);
+    Send(rpc_server, &message, 1, &reply, 1);
+
+    auto *timer = reinterpret_cast<unsigned *>(0xfe003000 + 0x04);
+    for (size_t i = 0; i < 2; ++i) {
+      message = *timer % 3;  // the action
+      Send(rpc_server, &message, 1, &reply, 1);
+      char buf[100];
+      size_t len = troll::snformat(buf, "[{}, {}] ", tid, message_to_rpc(message));
+
+      switch (static_cast<RPC_REPLY>(reply)) {
+        case RPC_REPLY::ABANDONED:
+          len += troll::snformat(buf + len, sizeof buf - len, "Match abandoned.", tid);
+          goto loop;
+        case RPC_REPLY::WIN_AND_SEND_ACTION:
+          len += troll::snformat(buf + len, sizeof buf - len, "I won.", tid);
+          break;
+        case RPC_REPLY::LOSE_AND_SEND_ACTION:
+          len += troll::snformat(buf + len, sizeof buf - len, "I lost.", tid);
+          break;
+        case RPC_REPLY::TIE_AND_SEND_ACTION:
+          len += troll::snformat(buf + len, sizeof buf - len, "Tie.", tid);
+          break;
+        default:
+          break;
+      }
+      len += troll::snformat(buf + len, sizeof buf - len, "\r\n");
+      uart_puts(0, 0, buf, len);
+      uart_getc(0, 0);
+    }
+    message = static_cast<char>(RPC_MESSAGE::QUIT);
+    Send(rpc_server, &message, 1, &reply, 1);
+  }
+}
+
+/**
+ * spawns an rpc server and 5 clients; let them play games on their own.
+ */
+void rpc_first_user_task() {
+  Create(PRIORITY_L5, nameserver);
+  Create(PRIORITY_L4, rpcserver);
+  DEBUG_LITERAL("You need to press a key to continue outputs.\r\n");
+  for (size_t i = 0; i < 5; ++i) {
+    Create(PRIORITY_L2, rpc_other_user_task);
+  }
+}
+
+}  // namespace k2

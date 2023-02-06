@@ -29,7 +29,7 @@ int main() {
 
   // spawn first task
   auto *current_task = task_manager.new_task(KERNEL_TID, 1, PRIORITY_L3);
-  current_task->context.registers[0] = reinterpret_cast<int64_t>(k2_user_task);
+  current_task->context.registers[0] = reinterpret_cast<int64_t>(k2::rpc_first_user_task);
   current_task->context.exception_lr = reinterpret_cast<uint64_t>(task_wrapper);
   task_manager.ready_push(current_task);
 

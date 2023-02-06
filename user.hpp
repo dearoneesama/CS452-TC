@@ -4,6 +4,12 @@
  * With the task wrapper, a user task does not need to explicitly call Exit
 */
 void task_wrapper(void (*the_task)());
-void first_user_task();
 
-void k2_user_task();
+namespace k1 {
+  void first_user_task();
+}
+
+namespace k2 {
+  void test_user_task();
+  void rpc_first_user_task();
+}
