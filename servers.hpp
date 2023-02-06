@@ -9,7 +9,7 @@ void nameserver();
 
 static constexpr size_t MAX_QUEUED_PLAYERS = 10;
 
-enum class RPC_MESSAGE : char {
+enum class RPS_MESSAGE : char {
   ROCK = 0,
   PAPER,
   SCISSORS,
@@ -17,7 +17,7 @@ enum class RPC_MESSAGE : char {
   QUIT,
 };
 
-enum class RPC_REPLY : char {
+enum class RPS_REPLY : char {
   SEND_ACTION,
   WIN_AND_SEND_ACTION,
   LOSE_AND_SEND_ACTION,
@@ -26,4 +26,4 @@ enum class RPC_REPLY : char {
   INVALID,
 };
 
-void rpcserver();
+void rpsserver();

@@ -11,5 +11,5 @@ namespace k1 {
 
 namespace k2 {
   void test_user_task();
-  void rpc_first_user_task();
+  void rps_first_user_task();
 }

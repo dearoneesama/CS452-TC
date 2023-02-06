@@ -116,47 +116,47 @@ void test_user_task() {
   }
 }
 
-etl::string_view message_to_rpc(char m) {
-  switch (static_cast<RPC_MESSAGE>(m)) {
-    case RPC_MESSAGE::PAPER:
+etl::string_view message_to_rps(char m) {
+  switch (static_cast<RPS_MESSAGE>(m)) {
+    case RPS_MESSAGE::PAPER:
       return "paper";
-    case RPC_MESSAGE::ROCK:
+    case RPS_MESSAGE::ROCK:
       return "rock";
-    case RPC_MESSAGE::SCISSORS:
+    case RPS_MESSAGE::SCISSORS:
       return "scissors";
     default:
       return "unknown";
   }
 }
 
-void rpc_other_user_task() {
-  auto rpc_server = WhoIs("rpcserver");
+void rps_other_user_task() {
+  auto rps_server = WhoIs("rpsserver");
   auto tid = MyTid();
   char reply;
   while (1) {
     loop:
     // play two rounds and quit
-    auto message = static_cast<char>(RPC_MESSAGE::SIGNUP);
-    Send(rpc_server, &message, 1, &reply, 1);
+    auto message = static_cast<char>(RPS_MESSAGE::SIGNUP);
+    Send(rps_server, &message, 1, &reply, 1);
 
     auto *timer = reinterpret_cast<unsigned *>(0xfe003000 + 0x04);
     for (size_t i = 0; i < 2; ++i) {
       message = *timer % 3;  // the action
-      Send(rpc_server, &message, 1, &reply, 1);
+      Send(rps_server, &message, 1, &reply, 1);
       char buf[100];
-      size_t len = troll::snformat(buf, "[{}, {}] ", tid, message_to_rpc(message));
+      size_t len = troll::snformat(buf, "[{}, {}] ", tid, message_to_rps(message));
 
-      switch (static_cast<RPC_REPLY>(reply)) {
-        case RPC_REPLY::ABANDONED:
+      switch (static_cast<RPS_REPLY>(reply)) {
+        case RPS_REPLY::ABANDONED:
           len += troll::snformat(buf + len, sizeof buf - len, "Match abandoned.", tid);
           goto loop;
-        case RPC_REPLY::WIN_AND_SEND_ACTION:
+        case RPS_REPLY::WIN_AND_SEND_ACTION:
           len += troll::snformat(buf + len, sizeof buf - len, "I won.", tid);
           break;
-        case RPC_REPLY::LOSE_AND_SEND_ACTION:
+        case RPS_REPLY::LOSE_AND_SEND_ACTION:
           len += troll::snformat(buf + len, sizeof buf - len, "I lost.", tid);
           break;
-        case RPC_REPLY::TIE_AND_SEND_ACTION:
+        case RPS_REPLY::TIE_AND_SEND_ACTION:
           len += troll::snformat(buf + len, sizeof buf - len, "Tie.", tid);
           break;
         default:
@@ -166,20 +166,20 @@ void rpc_other_user_task() {
       uart_puts(0, 0, buf, len);
       uart_getc(0, 0);
     }
-    message = static_cast<char>(RPC_MESSAGE::QUIT);
-    Send(rpc_server, &message, 1, &reply, 1);
+    message = static_cast<char>(RPS_MESSAGE::QUIT);
+    Send(rps_server, &message, 1, &reply, 1);
   }
 }
 
 /**
- * spawns an rpc server and 5 clients; let them play games on their own.
+ * spawns an rps server and 5 clients; let them play games on their own.
  */
-void rpc_first_user_task() {
+void rps_first_user_task() {
   Create(PRIORITY_L5, nameserver);
-  Create(PRIORITY_L4, rpcserver);
+  Create(PRIORITY_L4, rpsserver);
   DEBUG_LITERAL("You need to press a key to continue outputs.\r\n");
   for (size_t i = 0; i < 5; ++i) {
-    Create(PRIORITY_L2, rpc_other_user_task);
+    Create(PRIORITY_L2, rps_other_user_task);
   }
 }
 
