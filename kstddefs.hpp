@@ -40,3 +40,6 @@ static_assert(!(TASK_STACK_SIZE % SP_ALIGNMENT));
 #define SC_CLRLNE "\033[2K\r"         // clear current line
 #define SC_HIDCUR "\033[?25l"         // hide cursor
 #define SC_SHWCUR "\033[?25h"         // display cursor
+
+// hardware
+#define GET_TIMER_COUNT() (*reinterpret_cast<volatile unsigned *>(0xfe003000 + 0x04))

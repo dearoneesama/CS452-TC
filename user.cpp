@@ -124,51 +124,88 @@ etl::string_view message_to_rps(char m) {
       return "rock";
     case RPS_MESSAGE::SCISSORS:
       return "scissors";
+    case RPS_MESSAGE::QUIT:
+      return "quit";
     default:
       return "unknown";
   }
 }
 
-void rps_other_user_task() {
+// if actions == nullptr: play 0~2 rounds and quit, then sign up again
+// otherwise: play actions( and quit)
+void rps_other_user_task(RPS_MESSAGE *actions) {
   auto rps_server = WhoIs("rpsserver");
   auto tid = MyTid();
   char reply;
-  while (1) {
-    loop:
-    // play two rounds and quit
+  do {
     auto message = static_cast<char>(RPS_MESSAGE::SIGNUP);
     Send(rps_server, &message, 1, &reply, 1);
 
-    auto *timer = reinterpret_cast<unsigned *>(0xfe003000 + 0x04);
     for (size_t i = 0; i < 2; ++i) {
-      message = *timer % 3;  // the action
+      if (actions) {
+        message = static_cast<char>(actions[i]);
+      } else {
+        if (GET_TIMER_COUNT() % 10 == 7) {  // "random" quit
+          message = static_cast<char>(RPS_MESSAGE::QUIT);
+        } else {
+          message = GET_TIMER_COUNT() % 3;  // "random" action
+        }
+      }
       Send(rps_server, &message, 1, &reply, 1);
+
       char buf[100];
       size_t len = troll::snformat(buf, "[{}, {}] ", tid, message_to_rps(message));
 
       switch (static_cast<RPS_REPLY>(reply)) {
         case RPS_REPLY::ABANDONED:
-          len += troll::snformat(buf + len, sizeof buf - len, "Match abandoned.", tid);
+          len += troll::snformat(buf + len, sizeof buf - len, "Match abandoned.\r\n", tid);
+          uart_puts(0, 0, buf, len);
           goto loop;
         case RPS_REPLY::WIN_AND_SEND_ACTION:
-          len += troll::snformat(buf + len, sizeof buf - len, "I won.", tid);
+          len += troll::snformat(buf + len, sizeof buf - len, "I won.\r\n", tid);
           break;
         case RPS_REPLY::LOSE_AND_SEND_ACTION:
-          len += troll::snformat(buf + len, sizeof buf - len, "I lost.", tid);
+          len += troll::snformat(buf + len, sizeof buf - len, "I lost.\r\n", tid);
           break;
         case RPS_REPLY::TIE_AND_SEND_ACTION:
-          len += troll::snformat(buf + len, sizeof buf - len, "Tie.", tid);
+          len += troll::snformat(buf + len, sizeof buf - len, "Tie.\r\n", tid);
           break;
         default:
           break;
       }
-      len += troll::snformat(buf + len, sizeof buf - len, "\r\n");
       uart_puts(0, 0, buf, len);
-      uart_getc(0, 0);
+      if (!actions) {
+        uart_getc(0, 0);  // block if random play
+      }
     }
     message = static_cast<char>(RPS_MESSAGE::QUIT);
     Send(rps_server, &message, 1, &reply, 1);
-  }
+  loop:
+    (void)0;
+  } while (!actions);
+}
+
+void rps_static_test() {
+  // case 1
+  DEBUG_LITERAL("Case 1: Client 1 has higher priority than client 2\r\n");
+  DEBUG_LITERAL("Client 1 plays rock and client 2 plays scissors, then client 1 quits\r\n");
+  // but the rps_static_test() task has lower priority
+  Create(PRIORITY_L5, [] { RPS_MESSAGE act[] {RPS_MESSAGE::ROCK, RPS_MESSAGE::QUIT}; rps_other_user_task(act); });
+  Create(PRIORITY_L4, [] { RPS_MESSAGE act[] {RPS_MESSAGE::SCISSORS, RPS_MESSAGE::ROCK}; rps_other_user_task(act); } );
+
+  // case 2
+  DEBUG_LITERAL("Case 2: Client 1 has higher priority than client 2\r\n");
+  DEBUG_LITERAL("Client 1 plays rock and client 2 quits\r\n");
+  Create(PRIORITY_L5, [] { RPS_MESSAGE act[] {RPS_MESSAGE::ROCK, RPS_MESSAGE::ROCK}; rps_other_user_task(act); });
+  Create(PRIORITY_L4, [] { RPS_MESSAGE act[] {RPS_MESSAGE::QUIT, RPS_MESSAGE::QUIT}; rps_other_user_task(act); } );
+
+  // case 3
+  DEBUG_LITERAL("Case 3: Client 1 and client 2 both have the same priority\r\n");
+  DEBUG_LITERAL("Client 1 signs up, followed by client 2, then client 1 quits\r\n");
+  Create(PRIORITY_L4, [] { RPS_MESSAGE act[] {RPS_MESSAGE::QUIT, RPS_MESSAGE::ROCK}; rps_other_user_task(act); });
+  Create(PRIORITY_L4, [] { RPS_MESSAGE act[] {RPS_MESSAGE::QUIT, RPS_MESSAGE::ROCK}; rps_other_user_task(act); } );
+
+  DEBUG_LITERAL("End of edge cases tests\r\n\r\n");
 }
 
 /**
@@ -177,9 +214,13 @@ void rps_other_user_task() {
 void rps_first_user_task() {
   Create(PRIORITY_L5, nameserver);
   Create(PRIORITY_L4, rpsserver);
+  rps_static_test();
+
+  DEBUG_LITERAL("Starting random play using timestamp as the crappy random number.\r\n");
+  DEBUG_LITERAL("Five clients are spawned, each of them will sign up, play 0~2 rounds, and re-sign up.\r\n");
   DEBUG_LITERAL("You need to press a key to continue outputs.\r\n");
   for (size_t i = 0; i < 5; ++i) {
-    Create(PRIORITY_L2, rps_other_user_task);
+    Create(PRIORITY_L2, [] { rps_other_user_task(nullptr); });
   }
 }
 
