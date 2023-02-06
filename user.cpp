@@ -293,8 +293,126 @@ void perf_task() {
   }
 }
 
+void receiver_second() {
+  char buffer[256];
+
+  int tid;
+  int i, j;
+  volatile int val;
+
+  for (i = 0; i < 3; ++i) {
+    for (j = 0; j < 2048; ++j) {
+      val = Receive(&tid, buffer, 256);
+      Reply(tid, buffer, val);
+    }
+  }
+
+  for (i = 0; i < 3; ++i) {
+    for (j = 0; j < 2048; ++j) {
+      val = Receive(&tid, buffer, 256);
+      Reply(tid, buffer, val);
+    }
+  }
+
+  for (i = 0; i < 3; ++i) {
+    for (j = 0; j < 2048; ++j) {
+      val = Receive(&tid, buffer, 256);
+      Reply(tid, buffer, val);
+    }
+  }
+
+  for (i = 0; i < 3; ++i) {
+    for (j = 0; j < 2048; ++j) {
+      val = Receive(&tid, buffer, 256);
+      Reply(tid, buffer, val);
+    }
+  }
+}
+
 void perf_main_task() {
   Create(PRIORITY_L4, perf_task);
+}
+
+void sender_first() {
+  int tid = Create(PRIORITY_L4, receiver_second);
+
+  char buffer[256];
+  char reply[256];
+  // {nocache|icache|dcache|bcach} {R|S} {4|64|256} {time}
+  char output_buffer[128];
+
+  size_t sizes[3] = { 4, 64, 256 };
+  volatile auto *timer = reinterpret_cast<unsigned *>(0xfe003000 + 0x04);
+
+  uint32_t start_tick, elapsed;
+
+  int i;
+  int j;
+  size_t size;
+  volatile int val;
+
+  // no cache
+  for (i = 0; i < 3; ++i) {
+    size = sizes[i];
+    start_tick = *timer;
+    for (j = 0; j < 2048; ++j) {
+      val = Send(tid, buffer, size, reply, size);
+    }
+    elapsed = *timer - start_tick;
+    uart_puts(0, 0, output_buffer, troll::snformat(output_buffer, "nocache S {} {}\r\n", size, (elapsed >> 11)));
+  }
+
+  // icache
+  ICache();
+  for (i = 0; i < 3; ++i) {
+    size = sizes[i];
+    start_tick = *timer;
+    for (j = 0; j < 2048; ++j) {
+      val = Send(tid, buffer, size, reply, size);
+    }
+    elapsed = *timer - start_tick;
+    uart_puts(0, 0, output_buffer, troll::snformat(output_buffer, "icache S {} {}\r\n", size, (elapsed >> 11)));
+  }
+
+  // bcache
+  BCache();
+  for (i = 0; i < 3; ++i) {
+    size = sizes[i];
+    start_tick = *timer;
+    for (j = 0; j < 2048; ++j) {
+      val = Send(tid, buffer, size, reply, size);
+    }
+    elapsed = *timer - start_tick;
+    uart_puts(0, 0, output_buffer, troll::snformat(output_buffer, "bcache S {} {}\r\n", size, (elapsed >> 11)));
+  }
+
+  // dcache
+  DCache();
+  for (i = 0; i < 3; ++i) {
+    size = sizes[i];
+    start_tick = *timer;
+    for (j = 0; j < 2048; ++j) {
+      val = Send(tid, buffer, size, reply, size);
+    }
+    elapsed = *timer - start_tick;
+    uart_puts(0, 0, output_buffer, troll::snformat(output_buffer, "dcache S {} {}\r\n", size, (elapsed >> 11)));
+  }
+}
+
+#ifndef BENCHMARKING
+#define BENCHMARKING 0
+#endif
+
+void benchmarking() {
+  Create(PRIORITY_L5, sender_first);
+}
+
+void first_user_task() {
+#if BENCHMARKING
+  benchmarking();
+#else
+  rps_first_user_task();
+#endif
 }
 
 }  // namespace k2

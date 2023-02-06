@@ -14,6 +14,21 @@ void initialize() {
 // bits[0:24] hold N in svc N
 #define ESR_MASK 0x1FFFFFF
 
+// need to be i -> b -> d, otherwise won't work
+
+void enable_dcache() {
+  asm volatile("msr SCTLR_EL1, %x0\n\t" :: "r"(4));
+  asm volatile("IC IALLUIS");
+}
+
+void enable_bcache() {
+  asm volatile("msr SCTLR_EL1, %x0\n\t" :: "r"(4100));
+}
+
+void enable_icache() {
+  asm volatile("msr SCTLR_EL1, %x0\n\t" :: "r"(4096));
+}
+
 int main() {
   initialize();
   init_gpio();
@@ -29,7 +44,7 @@ int main() {
 
   // spawn first task
   auto *current_task = task_manager.new_task(KERNEL_TID, 1, PRIORITY_L3);
-  current_task->context.registers[0] = reinterpret_cast<int64_t>(k2::rps_first_user_task);
+  current_task->context.registers[0] = reinterpret_cast<int64_t>(k2::first_user_task);
   current_task->context.exception_lr = reinterpret_cast<uint64_t>(task_wrapper);
   task_manager.ready_push(current_task);
 
@@ -70,6 +85,22 @@ int main() {
       }
       case SYSCALLN_EXIT: {
         task_manager.k_exit(current_task);
+        break;
+      }
+      // only for benchmarking
+      case SYSBENCHMARK_ICACHE: {
+        enable_icache();
+        task_manager.ready_push(current_task);
+        break;
+      }
+      case SYSBENCHMARK_BCACHE: {
+        enable_bcache();
+        task_manager.ready_push(current_task);
+        break;
+      }
+      case SYSBENCHMARK_DCACHE: {
+        enable_dcache();
+        task_manager.ready_push(current_task);
         break;
       }
       default: {

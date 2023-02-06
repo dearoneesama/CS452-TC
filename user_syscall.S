@@ -47,3 +47,21 @@ Reply:
 Exit:
     svc SYSCALLN_EXIT
     ret
+
+.global DCache
+.balign 16
+DCache:
+    svc SYSBENCHMARK_DCACHE
+    ret
+
+.global ICache
+.balign 16
+ICache:
+    svc SYSBENCHMARK_ICACHE
+    ret
+
+.global BCache
+.balign 16
+BCache:
+    svc SYSBENCHMARK_BCACHE
+    ret

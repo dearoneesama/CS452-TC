@@ -27,7 +27,7 @@ namespace kernel {
     tid_t parent_tid = 0;
     priority_t priority = PRIORITY_UNDEFINED;
     task_state_t state = task_state_t::Free;
-    context_t context;  // TODO: initialize the context to point to some error function
+    volatile context_t context;  // TODO: initialize the context to point to some error function
 
     task_descriptor() = default;
   };

@@ -16,3 +16,8 @@ extern "C" int Reply(int tid, const char* reply, int rplen);
 // names must be null-terminated
 int RegisterAs(const char* name);
 int WhoIs(const char* name);
+
+// benchmarking
+extern "C" void DCache();
+extern "C" void ICache();
+extern "C" void BCache();
