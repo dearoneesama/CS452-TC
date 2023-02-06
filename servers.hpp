@@ -23,6 +23,7 @@ enum class RPC_REPLY : char {
   LOSE_AND_SEND_ACTION,
   TIE_AND_SEND_ACTION,
   ABANDONED,
+  INVALID,
 };
 
 void rpcserver();

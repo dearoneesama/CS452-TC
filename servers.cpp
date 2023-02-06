@@ -1,4 +1,3 @@
-#include <tuple>
 #include <etl/queue.h>
 #include "containers.hpp"
 #include "servers.hpp"
@@ -43,161 +42,119 @@ void nameserver() {
   }
 }
 
+namespace {
+  // 0: tie, 1: m1 wins, -1: m2 wins
+  int rpc_who_wins(RPC_MESSAGE m1, RPC_MESSAGE m2) {
+    if (m1 == m2) {
+      return 0;
+    } else if (
+      (m1 == RPC_MESSAGE::ROCK     && m2 == RPC_MESSAGE::PAPER) ||
+      (m1 == RPC_MESSAGE::PAPER    && m2 == RPC_MESSAGE::SCISSORS) ||
+      (m1 == RPC_MESSAGE::SCISSORS && m2 == RPC_MESSAGE::ROCK)
+    ) {
+      return -1;
+    }
+    return 1;
+  }
+
+  void rpc_reply(tid_t tid, RPC_REPLY r) {
+    auto buf = static_cast<char>(r);
+    Reply(tid, &buf, sizeof buf);
+  }
+}  // namespace
+
+
 void rpcserver() {
   RegisterAs("rpcserver");
   etl::queue<tid_t, MAX_QUEUED_PLAYERS> queue;
   struct {
-    tid_t tid;
-    RPC_MESSAGE which;
+    tid_t tid = 0;
+    RPC_MESSAGE which = RPC_MESSAGE::SIGNUP;
   } p[2];
-
-  enum class state_t {
-    WAITING_FOR_BOTH,
-    WAITING_FOR_OTHER,
-    WAITING_FOR_BOTH_ACT,
-    WAITING_FOR_OTHER_ACT,
-    RESULT,
-  } state = state_t::WAITING_FOR_BOTH;
+  bool match = false;
 
   tid_t request_tid;
   char message;
-  char reply;
-
   while (1) {
-    switch (state) {
-      case state_t::WAITING_FOR_BOTH: {
-        if (queue.size()) {
-          p[0].tid = queue.front();
-          queue.pop();
-          state = state_t::WAITING_FOR_OTHER;
-          break;
-        }
-        Receive((int*)&request_tid, &message, sizeof message);
-        if (message == static_cast<char>(RPC_MESSAGE::SIGNUP)) {
-          p[0].tid = request_tid;
-          state = state_t::WAITING_FOR_OTHER;
-        } else if (message == static_cast<char>(RPC_MESSAGE::QUIT)) {
-          // noop <= extra calling from a task after one task calls quit and this leaves
-          // WAITING_FOR_BOTH_ACT state.
-          // same handling is applied to other states.
-          reply = static_cast<char>(RPC_REPLY::ABANDONED);
-          Reply(request_tid, &reply, 1);
-        }
-        break;
-      }
+    // get matched players from queue first
+    if (!match && queue.size() >= 2) {
+      p[0].tid = queue.front();
+      queue.pop();
+      p[1].tid = queue.front();
+      queue.pop();
+      rpc_reply(p[0].tid, RPC_REPLY::SEND_ACTION);
+      rpc_reply(p[1].tid, RPC_REPLY::SEND_ACTION);
+      match = true;
+      continue;
+    }
 
-      case state_t::WAITING_FOR_OTHER: {
-        reply = static_cast<char>(RPC_REPLY::SEND_ACTION);
-        if (queue.size()) {
-          p[1].tid = queue.front();
-          queue.pop();
-          Reply(p[0].tid, &reply, 1);
-          Reply(p[1].tid, &reply, 1);
-          state = state_t::WAITING_FOR_BOTH_ACT;
-          break;
-        }
-        Receive((int*)&request_tid, &message, sizeof message);
-        if (message == static_cast<char>(RPC_MESSAGE::SIGNUP)) {
-          p[1].tid = request_tid;
-          Reply(p[0].tid, &reply, 1);
-          Reply(p[1].tid, &reply, 1);
-          state = state_t::WAITING_FOR_BOTH_ACT;
-        } else if (message == static_cast<char>(RPC_MESSAGE::QUIT)) {
-          reply = static_cast<char>(RPC_REPLY::ABANDONED);
-          Reply(request_tid, &reply, 1);
-        }
-        break;
+    if (Receive(reinterpret_cast<int *>(&request_tid), &message, sizeof message) < 1) {
+      continue;
+    }
+    switch (auto act = static_cast<RPC_MESSAGE>(message)) {
+    case RPC_MESSAGE::SIGNUP: {
+      // ignore double signup after a match
+      if (match && (request_tid == p[0].tid || request_tid == p[1].tid)) {
+        rpc_reply(request_tid, RPC_REPLY::INVALID);
+      } else {
+        queue.push(request_tid);  // client is blocked
       }
+      break;
+    }
 
-      case state_t::WAITING_FOR_BOTH_ACT: {
-        Receive((int*)&request_tid, &message, sizeof message);
-        switch (static_cast<RPC_MESSAGE>(message)) {
-        case RPC_MESSAGE::SIGNUP:
-          queue.push(request_tid);
-          break;
-        case RPC_MESSAGE::ROCK:
-        case RPC_MESSAGE::PAPER:
-        case RPC_MESSAGE::SCISSORS:
-          if (request_tid == p[0].tid) {
-            p[0].which = static_cast<RPC_MESSAGE>(message);
-            state = state_t::WAITING_FOR_OTHER_ACT;
-          } else if (request_tid == p[1].tid) {
-            std::tie(p[0].tid, p[1].tid) = std::make_tuple(p[1].tid, p[0].tid);
-            p[0].which = static_cast<RPC_MESSAGE>(message);
-            state = state_t::WAITING_FOR_OTHER_ACT;
-          }
-          break;
-        case RPC_MESSAGE::QUIT:
-          // match is abandoned => quit both tasks including the one
-          // that did not call quit
-          reply = static_cast<char>(RPC_REPLY::ABANDONED);
-          if (request_tid == p[0].tid || request_tid == p[1].tid) {
-            Reply(p[0].tid, &reply, 1);
-            Reply(p[1].tid, &reply, 1);
-            state = state_t::WAITING_FOR_BOTH;
-          } else {
-            Reply(request_tid, &reply, 1);
-          }
-          break;
-        default:
-          break;
-        }
-        break;
+    case RPC_MESSAGE::PAPER:
+    case RPC_MESSAGE::ROCK:
+    case RPC_MESSAGE::SCISSORS: {
+      if (match && request_tid == p[0].tid) {
+        p[0].which = act;  // client is blocked
+      } else if (match && request_tid == p[1].tid) {
+        p[1].which = act;  // client is blocked
+      } else {
+        // likely the client is sending action after the session is dead
+        // (other play quits). in this case send abandon too.
+        // technically it gets mixed up if another client sends play without signing
+        // up and this if cond is hit. but this reply is ok too and that's user error
+        rpc_reply(request_tid, RPC_REPLY::ABANDONED);
       }
+      break;
+    }
 
-      case state_t::WAITING_FOR_OTHER_ACT: {
-        Receive((int*)&request_tid, &message, sizeof message);
-        switch (static_cast<RPC_MESSAGE>(message)) {
-        case RPC_MESSAGE::SIGNUP:
-          queue.push(request_tid);
-          break;
-        case RPC_MESSAGE::ROCK:
-        case RPC_MESSAGE::PAPER:
-        case RPC_MESSAGE::SCISSORS:
-          if (request_tid == p[1].tid) {
-            p[1].which = static_cast<RPC_MESSAGE>(message);
-            state = state_t::RESULT;
-          }
-          break;
-        case RPC_MESSAGE::QUIT: {
-          reply = static_cast<char>(RPC_REPLY::ABANDONED);
-          if (request_tid == p[0].tid || request_tid == p[1].tid) {
-            Reply(p[0].tid, &reply, 1);
-            Reply(p[1].tid, &reply, 1);
-            state = state_t::WAITING_FOR_BOTH;
-          } else {
-            Reply(request_tid, &reply, 1);
-          }
+    case RPC_MESSAGE::QUIT: {
+      if (match && (request_tid == p[0].tid || request_tid == p[1].tid)) {
+        rpc_reply(request_tid, RPC_REPLY::ABANDONED);
+        // if other player already gave action, then reply with abandon right now;
+        // otherwise if the current task is the first one to give action (quit)
+        // then the other task can give action|quit later, and receive an abandon
+        if (request_tid == p[0].tid && p[1].which != RPC_MESSAGE::SIGNUP) {
+          rpc_reply(p[1].tid, RPC_REPLY::ABANDONED);
+        } else if (request_tid == p[1].tid && p[0].which != RPC_MESSAGE::SIGNUP) {
+          rpc_reply(p[0].tid, RPC_REPLY::ABANDONED);
         }
-          break;
-        default:
-          break;
-        }
-        break;
+        match = false;
+        p[0] = p[1] = {};
+      } else {
+        rpc_reply(request_tid, RPC_REPLY::ABANDONED);
       }
+      break;
+    }
+    }
 
-      case state_t::RESULT: {
-        char reply1;
-        if ((p[0].which == RPC_MESSAGE::PAPER && p[1].which == RPC_MESSAGE::ROCK)
-          || (p[0].which == RPC_MESSAGE::ROCK && p[1].which == RPC_MESSAGE::SCISSORS)
-          || (p[0].which == RPC_MESSAGE::SCISSORS && p[1].which == RPC_MESSAGE::PAPER)
-        ) {
-          reply = static_cast<char>(RPC_REPLY::WIN_AND_SEND_ACTION);
-          reply1 = static_cast<char>(RPC_REPLY::LOSE_AND_SEND_ACTION);
-        } else if ((p[0].which == RPC_MESSAGE::PAPER && p[1].which == RPC_MESSAGE::SCISSORS)
-          || (p[0].which == RPC_MESSAGE::ROCK && p[1].which == RPC_MESSAGE::PAPER)
-          || (p[0].which == RPC_MESSAGE::SCISSORS && p[1].which == RPC_MESSAGE::ROCK)
-        ) {
-          reply = static_cast<char>(RPC_REPLY::LOSE_AND_SEND_ACTION);
-          reply1 = static_cast<char>(RPC_REPLY::WIN_AND_SEND_ACTION);
-        } else {
-          reply = reply1 = static_cast<char>(RPC_REPLY::TIE_AND_SEND_ACTION);
-        }
-        Reply(p[0].tid, &reply, 1);
-        Reply(p[1].tid, &reply1, 1);
-        state = state_t::WAITING_FOR_BOTH_ACT;
-        break;
+    if (match && p[0].which != RPC_MESSAGE::SIGNUP && p[1].which != RPC_MESSAGE::SIGNUP) {
+      // send result, and continue asking for play|quit
+      auto cmp = rpc_who_wins(p[0].which, p[1].which);
+      RPC_REPLY reply0, reply1;
+      if (cmp == -1) {
+        reply0 = RPC_REPLY::LOSE_AND_SEND_ACTION;
+        reply1 = RPC_REPLY::WIN_AND_SEND_ACTION;
+      } else if (cmp == 1) {
+        reply0 = RPC_REPLY::WIN_AND_SEND_ACTION;
+        reply1 = RPC_REPLY::LOSE_AND_SEND_ACTION;
+      } else {
+        reply0 = reply1 = RPC_REPLY::TIE_AND_SEND_ACTION;
       }
+      rpc_reply(p[0].tid, reply0);
+      rpc_reply(p[1].tid, reply1);
+      p[0].which = p[1].which = RPC_MESSAGE::SIGNUP;
     }
   }
 }
