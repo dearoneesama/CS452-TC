@@ -7,7 +7,7 @@ static constexpr size_t MAX_TASK_NAME_LENGTH = 21;
 
 void nameserver();
 
-static constexpr size_t MAX_QUEUED_PLAYERS = 10;
+static constexpr size_t MAX_RPS_PLAYERS = 20;
 
 enum class RPS_MESSAGE : char {
   ROCK = 0,

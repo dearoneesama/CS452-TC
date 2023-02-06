@@ -205,6 +205,12 @@ void rps_static_test() {
   Create(PRIORITY_L4, [] { RPS_MESSAGE act[] {RPS_MESSAGE::QUIT, RPS_MESSAGE::ROCK}; rps_other_user_task(act); });
   Create(PRIORITY_L4, [] { RPS_MESSAGE act[] {RPS_MESSAGE::QUIT, RPS_MESSAGE::ROCK}; rps_other_user_task(act); } );
 
+  // case 4
+  DEBUG_LITERAL("Case 4: Client 1 and client 2 both have the same priority\r\n");
+  DEBUG_LITERAL("Client 1 plays rock and scissors, client 2 plays paper and scissors. They quit gracefully\r\n");
+  Create(PRIORITY_L4, [] { RPS_MESSAGE act[] {RPS_MESSAGE::ROCK, RPS_MESSAGE::SCISSORS}; rps_other_user_task(act); });
+  Create(PRIORITY_L4, [] { RPS_MESSAGE act[] {RPS_MESSAGE::PAPER, RPS_MESSAGE::SCISSORS}; rps_other_user_task(act); } );
+
   DEBUG_LITERAL("End of edge cases tests\r\n\r\n");
 }
 

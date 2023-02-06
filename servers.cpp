@@ -66,25 +66,29 @@ namespace {
 
 void rpsserver() {
   RegisterAs("rpsserver");
-  etl::queue<tid_t, MAX_QUEUED_PLAYERS> queue;
-  struct {
-    tid_t tid = 0;
+  etl::queue<tid_t, 2> queue;
+
+  struct match {
+    tid_t opponent = 0;
     RPS_MESSAGE which = RPS_MESSAGE::SIGNUP;
-  } p[2];
-  bool match = false;
+  };
+  // tid -> match obj -> tid
+  etl::unordered_map<tid_t, match, MAX_RPS_PLAYERS * 2> matches;
 
   tid_t request_tid;
   char message;
   while (1) {
     // get matched players from queue first
-    if (!match && queue.size() >= 2) {
-      p[0].tid = queue.front();
+    if (queue.size() >= 2) {
+      tid_t p0, p1;
+      p0 = queue.front();
       queue.pop();
-      p[1].tid = queue.front();
+      p1 = queue.front();
       queue.pop();
-      rps_reply(p[0].tid, RPS_REPLY::SEND_ACTION);
-      rps_reply(p[1].tid, RPS_REPLY::SEND_ACTION);
-      match = true;
+      matches[p0] = {p1, RPS_MESSAGE::SIGNUP};
+      matches[p1] = {p0, RPS_MESSAGE::SIGNUP};
+      rps_reply(p0, RPS_REPLY::SEND_ACTION);
+      rps_reply(p1, RPS_REPLY::SEND_ACTION);
       continue;
     }
 
@@ -94,7 +98,7 @@ void rpsserver() {
     switch (auto act = static_cast<RPS_MESSAGE>(message)) {
     case RPS_MESSAGE::SIGNUP: {
       // ignore double signup after a match
-      if (match && (request_tid == p[0].tid || request_tid == p[1].tid)) {
+      if (matches.find(request_tid) != matches.cend()) {
         rps_reply(request_tid, RPS_REPLY::INVALID);
       } else {
         queue.push(request_tid);  // client is blocked
@@ -105,43 +109,43 @@ void rpsserver() {
     case RPS_MESSAGE::PAPER:
     case RPS_MESSAGE::ROCK:
     case RPS_MESSAGE::SCISSORS: {
-      if (match && request_tid == p[0].tid) {
-        p[0].which = act;  // client is blocked
-      } else if (match && request_tid == p[1].tid) {
-        p[1].which = act;  // client is blocked
-      } else {
+      if (auto found = matches.find(request_tid); found == matches.cend()) {
         // likely the client is sending action after the session is dead
         // (other play quits). in this case send abandon too.
         // technically it gets mixed up if another client sends play without signing
         // up and this if cond is hit. but this reply is ok too and that's user error
         rps_reply(request_tid, RPS_REPLY::ABANDONED);
+      } else {
+        found->second.which = act;  // client is blocked
       }
       break;
     }
 
     case RPS_MESSAGE::QUIT: {
-      if (match && (request_tid == p[0].tid || request_tid == p[1].tid)) {
+      if (auto found = matches.find(request_tid); found == matches.cend()) {
+        // other opponent quit already or request is troll
         rps_reply(request_tid, RPS_REPLY::ABANDONED);
-        // if other player already gave action, then reply with abandon right now;
-        // otherwise if the current task is the first one to give action (quit)
-        // then the other task can give action|quit later, and receive an abandon
-        if (request_tid == p[0].tid && p[1].which != RPS_MESSAGE::SIGNUP) {
-          rps_reply(p[1].tid, RPS_REPLY::ABANDONED);
-        } else if (request_tid == p[1].tid && p[0].which != RPS_MESSAGE::SIGNUP) {
-          rps_reply(p[0].tid, RPS_REPLY::ABANDONED);
-        }
-        match = false;
-        p[0] = p[1] = {};
       } else {
+        auto opponent_tid = found->second.opponent;
         rps_reply(request_tid, RPS_REPLY::ABANDONED);
+        if (auto opponent = matches[opponent_tid]; opponent.which != RPS_MESSAGE::SIGNUP) {
+          // other play has sent a command already. reply to it as well.
+          rps_reply(opponent_tid, RPS_REPLY::ABANDONED);
+        }
+        matches.erase(request_tid);
+        matches.erase(opponent_tid);
       }
       break;
     }
     }
 
-    if (match && p[0].which != RPS_MESSAGE::SIGNUP && p[1].which != RPS_MESSAGE::SIGNUP) {
+    for (auto &&[tid, match] : matches) {
+      auto &opponent = matches[match.opponent];
+      if (match.which == RPS_MESSAGE::SIGNUP || opponent.which == RPS_MESSAGE::SIGNUP) {
+        continue;
+      }
       // send result, and continue asking for play|quit
-      auto cmp = rps_who_wins(p[0].which, p[1].which);
+      auto cmp = rps_who_wins(match.which, opponent.which);
       RPS_REPLY reply0, reply1;
       if (cmp == -1) {
         reply0 = RPS_REPLY::LOSE_AND_SEND_ACTION;
@@ -152,9 +156,9 @@ void rpsserver() {
       } else {
         reply0 = reply1 = RPS_REPLY::TIE_AND_SEND_ACTION;
       }
-      rps_reply(p[0].tid, reply0);
-      rps_reply(p[1].tid, reply1);
-      p[0].which = p[1].which = RPS_MESSAGE::SIGNUP;
+      rps_reply(tid, reply0);
+      rps_reply(match.opponent, reply1);
+      match.which = opponent.which = RPS_MESSAGE::SIGNUP;
     }
   }
 }
