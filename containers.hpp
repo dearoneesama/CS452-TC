@@ -1,11 +1,13 @@
 #pragma once
 
 #include <etl/intrusive_queue.h>
+#include <etl/unordered_map.h>
+#include <etl/string.h>
 
 static_assert(sizeof(char) == 1UL);
 
 namespace troll {
-  using forward_link = etl::forward_link<0>;
+  using forward_link = ::etl::forward_link<0>;
 
   /**
    * a free list preallocates slabs of memory to hold objects.
@@ -204,4 +206,21 @@ namespace troll {
     etl::intrusive_queue<T, Link> intrusive_queue;
     size_type size_ = 0;
   };
-}
+
+  namespace etl {
+    // etl::hash<etl::string(|_view|_ext)> is not good here
+    // source: https://stackoverflow.com/questions/16075271/hashing-a-string-to-an-integer-in-c
+    struct string_hash {
+      template<class T>
+      size_t operator()(const T& text) const {
+        size_t hash = 5381, size = text.size();
+        for (size_t i = 0; i < size; ++i)
+          hash = 33 * hash + (size_t)text[i];
+        return hash;
+      }
+    };
+  }
+
+  template<class V, size_t MaxKeySize, size_t MaxSize>
+  using string_map = ::etl::unordered_map<::etl::string<MaxKeySize>, V, MaxSize, MaxSize, etl::string_hash>; 
+}  // namespace troll

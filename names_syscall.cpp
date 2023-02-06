@@ -1,12 +1,17 @@
 #include "user_syscall.h"
 
 int RegisterAs(const char* name) {
+  if (!name) {
+    return -2;
+  }
+
   char request_buffer[33];
   request_buffer[0] = 'r';
   size_t request_length = 1;
   while (*name) {
     request_buffer[request_length++] = *(name++);
   }
+  request_buffer[request_length++] = '\0';
   char reply_buffer[1];
   int reply_len = Send(3, request_buffer, request_length, reply_buffer, 1);
   if (reply_len == 1 && reply_buffer[0] == '1') {
@@ -19,12 +24,17 @@ int RegisterAs(const char* name) {
 }
 
 int WhoIs(const char* name) {
+  if (!name) {
+    return -2;
+  }
+
   char request_buffer[33];
   request_buffer[0] = 'w';
   size_t request_length = 1;
   while (*name) {
     request_buffer[request_length++] = *(name++);
   }
+  request_buffer[request_length++] = '\0';
   char reply_buffer[4];
   int reply_len = Send(3, request_buffer, request_length, reply_buffer, 4);
   if (reply_len < 0) {

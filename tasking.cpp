@@ -1,14 +1,10 @@
 #include "tasking.hpp"
 #include "user.hpp"
+#include "rpi.hpp"
 
 using namespace kernel;
 
 namespace {
-void copy_to(char* dest, const char* src, size_t n) {
-  for (size_t i = 0; i < n; ++i) {
-    *(dest++) = *(src++);
-  }
-}
 
 void send_message(task_descriptor* sender, task_descriptor* receiver) {
   tid_t sender_tid = sender->tid;
@@ -20,7 +16,7 @@ void send_message(task_descriptor* sender, task_descriptor* receiver) {
   size_t destlen = sender->context.registers[2];
 
   size_t n = srclen > destlen ? destlen : srclen;
-  copy_to(dest, src, n);
+  memcpy(dest, src, n);
   *tid = sender_tid;
   receiver->context.registers[0] = n;
   sender->state = task_state_t::ReplyWait;
@@ -34,7 +30,7 @@ void reply_message(task_descriptor* sender, task_descriptor *replier) {
   size_t destlen = sender->context.registers[4];
 
   size_t n = srclen > destlen ? destlen : srclen;
-  copy_to(dest, src, n);
+  memcpy(dest, src, n);
 
   replier->context.registers[0] = n;
   sender->context.registers[0] = n;
@@ -142,7 +138,8 @@ void task_manager::k_send(task_descriptor *curr_task) {
   }
 
   task_descriptor* target_task = allocator.at(target_tid - STARTING_TASK_TID);
-  if (!target_task) { // invalid tid
+  if (!target_task || task_reuse_statuses[target_tid - STARTING_TASK_TID].free) {
+    // invalid tid, or task exited
     curr_task->context.registers[0] = -1;
     ready_push(curr_task);
     return;
@@ -172,7 +169,8 @@ void task_manager::k_receive(task_descriptor *curr_task) {
 void task_manager::k_reply(task_descriptor *curr_task) {
   tid_t sender_tid = curr_task->context.registers[0];
   task_descriptor* sender_task = allocator.at(sender_tid - STARTING_TASK_TID);
-  if (!sender_task) {
+  if (!sender_task || task_reuse_statuses[sender_tid - STARTING_TASK_TID].free) {
+    // invalid tid, or task exited
     curr_task->context.registers[0] = -1;
     ready_push(curr_task);
     return;
