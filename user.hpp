@@ -12,4 +12,5 @@ namespace k1 {
 namespace k2 {
   void test_user_task();
   void rps_first_user_task();
+  void perf_main_task();
 }

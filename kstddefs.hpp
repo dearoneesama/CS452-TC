@@ -43,3 +43,6 @@ static_assert(!(TASK_STACK_SIZE % SP_ALIGNMENT));
 
 // hardware
 #define GET_TIMER_COUNT() (*reinterpret_cast<volatile unsigned *>(0xfe003000 + 0x04))
+
+static constexpr unsigned TIMER_FREQ = 1'000'000;  // 1mhz
+static constexpr unsigned TICK_TO_MS_FACTOR = 1'000'000 / TIMER_FREQ;

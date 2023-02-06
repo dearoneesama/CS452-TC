@@ -230,4 +230,71 @@ void rps_first_user_task() {
   }
 }
 
+static constexpr size_t PERF_REPEAT = 2048;
+
+void perf_receiver() {
+  char buffer[256];
+  tid_t tid;
+  while (1) {
+    auto len = Receive(reinterpret_cast<int *>(&tid), buffer, sizeof buffer);
+    Reply(tid, buffer, len);
+  }
+  // receiver task will starve: THIS is intentional to make things simpler
+}
+
+void perf_task() {
+  using sv = etl::string_view;
+  // {nocache|icache|dcache|bcache} {R|S} {4|64|256} {time}
+  const static auto output = [] (sv cache, sv RS, size_t size, unsigned ticks) {
+    char buf[100];
+    auto len = troll::snformat(buf, "{} {} {} {}\r\n", cache, RS, size, ticks / PERF_REPEAT * TICK_TO_MS_FACTOR);
+    uart_puts(0, 0, buf, len);
+  };
+
+  size_t sizes[] = { 4, 64, 256 };
+  char send_buf[256], recv_buf[256];
+  memset(send_buf, 0, sizeof send_buf / sizeof send_buf[0]);
+  memset(recv_buf, 0, sizeof recv_buf / sizeof recv_buf[0]);
+
+  unsigned start_tick;
+  // run nocache first -> then with caches
+  for (int cache_i = 0; cache_i < 4; ++cache_i) {
+    char const *cache;
+    switch (cache_i) {
+    case 0:  // SETUP nocache
+      cache = "nocache";
+      break;
+    case 1:  // SETUP icache
+      cache = "icache";
+      break;
+    case 2:  // SETIP dcache
+      cache = "dcache";
+      break;
+    case 3:  // SETUP bcache
+    default:
+      cache = "bcache";
+      break;
+      break;
+    }
+    for (int sender_first = 0; sender_first < 2; ++sender_first) {
+      auto target_tid = sender_first ? Create(PRIORITY_L3, perf_receiver)
+        : Create(PRIORITY_L5, perf_receiver);
+      char const *RS = sender_first ? "S" : "R";
+
+      for (size_t sz_i = 0; sz_i < sizeof sizes / sizeof sizes[0]; ++sz_i) {
+        auto size = sizes[sz_i];
+        start_tick = GET_TIMER_COUNT();
+        for (size_t i = 0; i < PERF_REPEAT; ++i) {
+          Send(target_tid, send_buf, size, recv_buf, size);
+        }
+        output(cache, RS, size, GET_TIMER_COUNT() - start_tick);
+      }
+    }
+  }
+}
+
+void perf_main_task() {
+  Create(PRIORITY_L4, perf_task);
+}
+
 }  // namespace k2
