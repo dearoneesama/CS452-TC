@@ -243,14 +243,6 @@ void perf_receiver() {
 }
 
 void perf_task() {
-  using sv = etl::string_view;
-  // {nocache|icache|dcache|bcache} {R|S} {4|64|256} {time}
-  const static auto output = [] (sv cache, sv RS, size_t size, unsigned ticks) {
-    char buf[100];
-    auto len = troll::snformat(buf, "{} {} {} {}\r\n", cache, RS, size, ticks / PERF_REPEAT * TICK_TO_MS_FACTOR);
-    uart_puts(0, 0, buf, len);
-  };
-
   size_t sizes[] = { 4, 64, 256 };
   char send_buf[256], recv_buf[256];
   memset(send_buf, 0, sizeof send_buf / sizeof send_buf[0]);
@@ -291,7 +283,11 @@ void perf_task() {
         for (size_t i = 0; i < PERF_REPEAT; ++i) {
           Send(target_tid, send_buf, size, recv_buf, size);
         }
-        output(cache, RS, size, GET_TIMER_COUNT() - start_tick);
+        auto ms_per = (GET_TIMER_COUNT() - start_tick) / PERF_REPEAT * TICK_TO_MS_FACTOR;
+        // {nocache|icache|dcache|bcache} {R|S} {4|64|256} {time}
+        char buf[100];
+        auto len = troll::snformat(buf, "{} {} {} {}\r\n", cache, RS, size, ms_per);
+        uart_puts(0, 0, buf, len);
       }
     }
   }
