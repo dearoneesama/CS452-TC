@@ -59,6 +59,11 @@ namespace kernel {
     void k_reply(task_descriptor *curr_task);
     void k_exit(task_descriptor *curr_task);
 
+    // configure hardware cache (performance syscalls)
+    void kp_dcache(task_descriptor *curr_task);
+    void kp_bcache(task_descriptor *curr_task);
+    void kp_icache(task_descriptor *curr_task);
+
   private:
     // reserved memory for stacks
     alignas(SP_ALIGNMENT) char stack_buff[TASK_STACK_SIZE * MAX_NUM_TASKS];

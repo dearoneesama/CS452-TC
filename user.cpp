@@ -279,6 +279,8 @@ void perf_task() {
       break;
     }
     for (int sender_first = 0; sender_first < 2; ++sender_first) {
+      // in receiver first situation, the first ever receive call by the receiver is not
+      // contained in the timing. this should not be a problem given PERF_REPEAT is big.
       auto target_tid = sender_first ? Create(PRIORITY_L3, perf_receiver)
         : Create(PRIORITY_L5, perf_receiver);
       char const *RS = sender_first ? "S" : "R";

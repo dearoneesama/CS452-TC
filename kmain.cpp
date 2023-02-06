@@ -14,21 +14,6 @@ void initialize() {
 // bits[0:24] hold N in svc N
 #define ESR_MASK 0x1FFFFFF
 
-// need to be i -> b -> d, otherwise won't work
-
-void enable_dcache() {
-  asm volatile("msr SCTLR_EL1, %x0\n\t" :: "r"(4));
-  asm volatile("IC IALLUIS");
-}
-
-void enable_bcache() {
-  asm volatile("msr SCTLR_EL1, %x0\n\t" :: "r"(4100));
-}
-
-void enable_icache() {
-  asm volatile("msr SCTLR_EL1, %x0\n\t" :: "r"(4096));
-}
-
 int main() {
   initialize();
   init_gpio();
@@ -89,18 +74,15 @@ int main() {
       }
       // only for benchmarking
       case SYSBENCHMARK_ICACHE: {
-        enable_icache();
-        task_manager.ready_push(current_task);
+        task_manager.kp_icache(current_task);
         break;
       }
       case SYSBENCHMARK_BCACHE: {
-        enable_bcache();
-        task_manager.ready_push(current_task);
+        task_manager.kp_bcache(current_task);
         break;
       }
       case SYSBENCHMARK_DCACHE: {
-        enable_dcache();
-        task_manager.ready_push(current_task);
+        task_manager.kp_dcache(current_task);
         break;
       }
       default: {

@@ -1,5 +1,6 @@
 #include "tasking.hpp"
 #include "user.hpp"
+#include "kernel.hpp"
 #include "rpi.hpp"
 
 using namespace kernel;
@@ -184,5 +185,20 @@ void task_manager::k_reply(task_descriptor *curr_task) {
 
   reply_message(sender_task, curr_task);
   ready_push(sender_task);
+  ready_push(curr_task);
+}
+
+void task_manager::kp_dcache(task_descriptor *curr_task) {
+  kernel::enable_dcache();
+  ready_push(curr_task);
+}
+
+void task_manager::kp_bcache(task_descriptor *curr_task) {
+  kernel::enable_bcache();
+  ready_push(curr_task);
+}
+
+void task_manager::kp_icache(task_descriptor *curr_task) {
+  kernel::enable_icache();
   ready_push(curr_task);
 }

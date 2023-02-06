@@ -9,4 +9,17 @@ int activate_task(volatile context_t* kernel_context, task_descriptor* current_t
 }
 
 void initialize() { initialize_kernel(); }
+
+void enable_dcache() {
+  asm volatile("msr SCTLR_EL1, %x0\n\t" :: "r"(1 << 2));
+  asm volatile("IC IALLUIS");
+}
+
+void enable_bcache() {
+  asm volatile("msr SCTLR_EL1, %x0\n\t" :: "r"((1 << 2) | (1 << 12)));
+}
+
+void enable_icache() {
+  asm volatile("msr SCTLR_EL1, %x0\n\t" :: "r"(1 << 12));
+}
 }  // namespace kernel
