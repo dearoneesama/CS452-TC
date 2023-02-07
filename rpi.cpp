@@ -311,8 +311,8 @@ extern "C" void *memset(void *s, int c, size_t n) {
 
 // define our own memcpy to avoid SIMD instructions emitted from the compiler
 extern "C" void* memcpy(void* __restrict__ dest, const void* __restrict__ src, size_t n) {
-  uint32_t* u64dest = (uint32_t*)dest;
-  uint32_t* u64src = (uint32_t*)src;
+  uint64_t* u64dest = (uint64_t*)dest;
+  uint64_t* u64src = (uint64_t*)src;
 
   // this is because ARMv8 registers are 64bit or 8bytes
   while (n >= 8) {
