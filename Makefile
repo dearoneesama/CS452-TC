@@ -1,5 +1,7 @@
 ifeq ($(JIXI_LOCAL), 1)
 	XDIR:=~/Projects/cs452-project/arm-gnu-toolchain-12.2.rel1-darwin-x86_64-aarch64-none-elf
+else ifeq ($(RUNNER_IMAGE), 1)
+	XDIR:=/usr/cs452-public-xdev
 else
 	XDIR:=/u/cs452/public/xdev
 endif

@@ -1,0 +1,18 @@
+image: cs452-build-env
+
+variables:
+  GIT_SUBMODULE_STRATEGY: recursive
+
+stages:
+  - build
+
+crosscompile:
+  stage: build
+  script:
+    - RUNNER_IMAGE=1 make
+
+localtest:
+  stage: build
+  script:
+    - cd unittesting
+    - make run
