@@ -2,7 +2,9 @@
 #include "containers.hpp"
 #include "servers.hpp"
 #include "kstddefs.hpp"
+#include "utils.hpp"
 #include "user_syscall.h"
+#include "rpi.hpp"
 
 void nameserver() {
   troll::string_map<tid_t, MAX_TASK_NAME_LENGTH, MAX_NUM_TASKS> lookup;
@@ -159,6 +161,82 @@ void rpsserver() {
       rps_reply(tid, reply0);
       rps_reply(match.opponent, reply1);
       match.which = opponent.which = RPS_MESSAGE::SIGNUP;
+    }
+  }
+}
+
+void clockserver() {
+  if (RegisterAs("clock_server") != 0) {
+    // something went wrong in registration
+    return;
+  }
+
+  uint32_t ticks_in_10ms = 0;
+  // tid -> target tick
+  etl::unordered_map<tid_t, uint32_t, MAX_NUM_TASKS> delays;
+
+  constexpr char buffer_length = 5;
+  char buffer[buffer_length];
+
+  tid_t request_tid;
+  while (1) {
+    int request = Receive((int*)&request_tid, buffer, buffer_length);
+    if (request <= 0) continue;
+    switch (static_cast<CLOCK_MESSAGE>(buffer[0])) {
+      case CLOCK_MESSAGE::TIME: {
+        buffer[0] = static_cast<char>(CLOCK_REPLY::TIME_OK);
+        utils::uint32_to_buffer(buffer + 1, ticks_in_10ms);
+        Reply(request_tid, buffer, 5);
+        break;
+      }
+      case CLOCK_MESSAGE::DELAY: {
+        uint32_t delay = utils::buffer_to_uint32(buffer + 1);
+        if (delay > 0) {
+          delays[request_tid] = delay;
+        } else {
+          buffer[0] = static_cast<char>(CLOCK_REPLY::DELAY_OK);
+          utils::uint32_to_buffer(buffer + 1, ticks_in_10ms);
+          Reply(request_tid, buffer, 5);
+        }
+        break;
+      }
+      case CLOCK_MESSAGE::DELAY_UNTIL: {
+        uint32_t delay_until = utils::buffer_to_uint32(buffer + 1);
+        int delay = delay_until - ticks_in_10ms;
+        if (delay > 0) {
+          delays[request_tid] = delay;
+        } else if (delay == 0) {
+          buffer[0] = static_cast<char>(CLOCK_REPLY::DELAY_OK);
+          utils::uint32_to_buffer(buffer + 1, ticks_in_10ms);
+          Reply(request_tid, buffer, 5);
+        } else {
+          buffer[0] = static_cast<char>(CLOCK_REPLY::DELAY_NEGATIVE);
+          Reply(request_tid, buffer, 1);
+        }
+        break;
+      }
+      case CLOCK_MESSAGE::NOTIFY: {
+        ++ticks_in_10ms;
+        buffer[0] = static_cast<char>(CLOCK_REPLY::NOTIFY_OK);
+        Reply(request_tid, buffer, 1);
+
+        buffer[0] = static_cast<char>(CLOCK_REPLY::DELAY_OK);
+        utils::uint32_to_buffer(buffer + 1, ticks_in_10ms);
+
+        // instead of removing them from the map, simply assume that
+        // delay == 0 means a null state
+        for (auto &&[tid, delay] : delays) {
+          if (delay == 0) {
+            continue;
+          }
+          delays[tid] -= 1;
+          if (delays[tid] == 0) {
+            Reply(tid, buffer, 5);
+          }
+        }
+        break;
+      }
+      default: break;
     }
   }
 }

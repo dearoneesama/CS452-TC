@@ -27,3 +27,19 @@ enum class RPS_REPLY : char {
 };
 
 void rpsserver();
+
+enum class CLOCK_MESSAGE : char {
+  NOTIFY = 0,
+  TIME,
+  DELAY,
+  DELAY_UNTIL,
+};
+
+enum class CLOCK_REPLY : char {
+  NOTIFY_OK = 0,
+  TIME_OK,
+  DELAY_OK,
+  DELAY_NEGATIVE,
+};
+
+void clockserver();

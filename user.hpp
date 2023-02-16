@@ -15,3 +15,7 @@ namespace k2 {
   void perf_main_task();
   void first_user_task();
 }
+
+namespace k3 {
+  void first_user_task();
+}

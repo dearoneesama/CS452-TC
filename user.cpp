@@ -4,6 +4,7 @@
 #include "user_syscall.h"
 #include "format.hpp"
 #include "servers.hpp"
+#include "notifiers.hpp"
 
 namespace k1 {
 
@@ -24,15 +25,15 @@ void other_task() {
 }
 
 /**
- * Creates two tasks at priority L1, followed by two tasks of priority P4
+ * Creates two tasks at priority P4, followed by two tasks of priority P1
  * 
  * In terms of termination:
- *  - Each L4 task will run until completion before anything else
+ *  - Each P1 task will run until completion before anything else
  *  - First user task will exit after each L4 task has terminated
- *  - The first L1 will print one line, and yield
- *  - The second L1 will print one line, and yield
- *  - The first L1 finishes
- *  - The second L1 finishes
+ *  - The first P4 will print one line, and yield
+ *  - The second P4 will print one line, and yield
+ *  - The first P4 finishes
+ *  - The second P4 finishes
 */
 void first_user_task() {
   // current task is PRIORITY_L3
@@ -40,16 +41,14 @@ void first_user_task() {
   const char *format = "Created: {}\r\n";
   char buffer[20];
 
-  // lower priority, meaning lower n in Ln
-  int task_1 = Create(PRIORITY_L1, other_task);
+  int task_1 = Create(PRIORITY_L4, other_task);
   uart_puts(0, 0, buffer, troll::snformat(buffer, format, task_1));
-  int task_2 = Create(PRIORITY_L1, other_task);
+  int task_2 = Create(PRIORITY_L4, other_task);
   uart_puts(0, 0, buffer, troll::snformat(buffer, format, task_2));
 
-  // higher priority, meaning higher n in Ln
-  int task_3 = Create(PRIORITY_L4, other_task);
+  int task_3 = Create(PRIORITY_L1, other_task);
   uart_puts(0, 0, buffer, troll::snformat(buffer, format, task_3));
-  int task_4 = Create(PRIORITY_L4, other_task);
+  int task_4 = Create(PRIORITY_L1, other_task);
   uart_puts(0, 0, buffer, troll::snformat(buffer, format, task_4));
 
   uart_puts(0, 0, "FirstUserTask: exiting\r\n", 24);
@@ -96,8 +95,8 @@ void test_child_task() {
 }
 
 void test_user_task() {
-  int nameserver_task = Create(PRIORITY_L5, nameserver);
-  Create(PRIORITY_L1, test_child_task);
+  int nameserver_task = Create(PRIORITY_L1, nameserver);
+  Create(PRIORITY_L2, test_child_task);
   char buffer[32];
   uart_puts(0, 0, buffer, troll::snformat(buffer, "Nameserver TID: {}\r\n", nameserver_task));
 
@@ -190,14 +189,14 @@ void rps_static_test() {
   DEBUG_LITERAL("Case 1: Client 1 has higher priority than client 2\r\n");
   DEBUG_LITERAL("Client 1 plays rock and client 2 plays scissors, then client 1 quits\r\n");
   // but the rps_static_test() task has lower priority
-  Create(PRIORITY_L5, [] { RPS_MESSAGE act[] {RPS_MESSAGE::ROCK, RPS_MESSAGE::QUIT}; rps_other_user_task(act); });
-  Create(PRIORITY_L4, [] { RPS_MESSAGE act[] {RPS_MESSAGE::SCISSORS, RPS_MESSAGE::ROCK}; rps_other_user_task(act); } );
+  Create(PRIORITY_L4, [] { RPS_MESSAGE act[] {RPS_MESSAGE::ROCK, RPS_MESSAGE::QUIT}; rps_other_user_task(act); });
+  Create(PRIORITY_L5, [] { RPS_MESSAGE act[] {RPS_MESSAGE::SCISSORS, RPS_MESSAGE::ROCK}; rps_other_user_task(act); } );
 
   // case 2
   DEBUG_LITERAL("Case 2: Client 1 has higher priority than client 2\r\n");
   DEBUG_LITERAL("Client 1 plays rock and client 2 quits\r\n");
-  Create(PRIORITY_L5, [] { RPS_MESSAGE act[] {RPS_MESSAGE::ROCK, RPS_MESSAGE::ROCK}; rps_other_user_task(act); });
-  Create(PRIORITY_L4, [] { RPS_MESSAGE act[] {RPS_MESSAGE::QUIT, RPS_MESSAGE::QUIT}; rps_other_user_task(act); } );
+  Create(PRIORITY_L4, [] { RPS_MESSAGE act[] {RPS_MESSAGE::ROCK, RPS_MESSAGE::ROCK}; rps_other_user_task(act); });
+  Create(PRIORITY_L5, [] { RPS_MESSAGE act[] {RPS_MESSAGE::QUIT, RPS_MESSAGE::QUIT}; rps_other_user_task(act); } );
 
   // case 3
   DEBUG_LITERAL("Case 3: Client 1 and client 2 both have the same priority\r\n");
@@ -218,8 +217,8 @@ void rps_static_test() {
  * spawns an rps server and 5 clients; let them play games on their own.
  */
 void rps_first_user_task() {
-  Create(PRIORITY_L5, nameserver);
-  Create(PRIORITY_L4, rpsserver);
+  Create(PRIORITY_L1, nameserver);
+  Create(PRIORITY_L1, rpsserver);
   rps_static_test();
 
   DEBUG_LITERAL("Starting random play using timestamp as the crappy random number.\r\n");
@@ -273,8 +272,8 @@ void perf_task() {
     for (int sender_first = 0; sender_first < 2; ++sender_first) {
       // in receiver first situation, the first ever receive call by the receiver is not
       // contained in the timing. this should not be a problem given PERF_REPEAT is big.
-      auto target_tid = sender_first ? Create(PRIORITY_L3, perf_receiver)
-        : Create(PRIORITY_L5, perf_receiver);
+      auto target_tid = sender_first ? Create(PRIORITY_L5, perf_receiver)
+        : Create(PRIORITY_L4, perf_receiver);
       char const *RS = sender_first ? "S" : "R";
 
       for (size_t sz_i = 0; sz_i < sizeof sizes / sizeof sizes[0]; ++sz_i) {
@@ -283,7 +282,7 @@ void perf_task() {
         for (size_t i = 0; i < PERF_REPEAT; ++i) {
           Send(target_tid, send_buf, size, recv_buf, size);
         }
-        auto ms_per = (GET_TIMER_COUNT() - start_tick) / PERF_REPEAT * TICK_TO_MS_FACTOR;
+        auto ms_per = (GET_TIMER_COUNT() - start_tick) / PERF_REPEAT * NUM_TICKS_IN_1US;
         // {nocache|icache|dcache|bcache} {R|S} {4|64|256} {time}
         char buf[100];
         auto len = troll::snformat(buf, "{} {} {} {}\r\n", cache, RS, size, ms_per);
@@ -311,3 +310,86 @@ void first_user_task() {
 }
 
 }  // namespace k2
+
+namespace k3 {
+
+void idle() {
+  time_distribution_t td = {0, 0, 0};
+  char buffer[128];
+  const char* format = "\0337\033[1;80H\033[KKernel: {}%  User: {}%  Idle: {}%\r\n\0338";
+  size_t len;
+  while (1) {
+    TimeDistribution(&td);
+    len = troll::snformat(buffer, format,
+      (td.kernel_ticks * 100) / td.total_ticks,
+      ((td.total_ticks - td.kernel_ticks - td.idle_ticks) * 100) / td.total_ticks,
+      (td.idle_ticks * 100) / td.total_ticks
+    );
+    uart_puts(0, 0, buffer, len);
+    SaveThePlanet();
+  }
+}
+
+void clock_client() {
+  tid_t ptid = MyParentTid();
+  tid_t tid = MyTid();
+
+  char buffer[2];
+  int replylen = Send(ptid, "c", 1, buffer, 2);
+  if (replylen != 2) {
+    DEBUG_LITERAL("Something went wrong in clock client\r\n");
+    return;
+  }
+
+  int interval = (int) buffer[0];
+  int num_delays = (int) buffer[1];
+
+  tid_t clock_server = WhoIs("clock_server");
+  uint32_t current_time = Time(clock_server);
+
+  const char* format = "TID: {}  Interval: {}  Delays Completed: {}  Current Tick: {}\r\n";
+  char print_buffer[128];
+  for (int i = 0; i < num_delays; ++i) {
+    current_time = DelayUntil(clock_server, current_time + interval);
+    uart_puts(0, 0, print_buffer, troll::snformat(print_buffer, format, tid, interval, i+1, current_time));
+  }
+}
+
+void first_user_task() {
+  Create(PRIORITY_L1, nameserver);
+  Create(PRIORITY_IDLE, idle);
+  Create(PRIORITY_L1, clockserver);
+  Create(PRIORITY_L1, clocknotifier);
+
+  // create the clients
+  int clock_clients[4] = {
+    Create(PRIORITY_L3, clock_client),
+    Create(PRIORITY_L4, clock_client),
+    Create(PRIORITY_L5, clock_client),
+    Create(PRIORITY_L6, clock_client),
+  };
+
+  // the responses for each client
+  // {delay_ticks, num_delays}
+  char responses[4][2] = {
+    {10, 20},
+    {23, 9},
+    {33, 6},
+    {71, 3},
+  };
+  char msg;
+  int client_tid;
+  for (int i = 0; i < 4; ++i) {
+    Receive(&client_tid, &msg, 1);
+    if (msg == 'c') {
+      for (int j = 0; j < 4; ++j) {
+        if (clock_clients[j] == client_tid) {
+          Reply(client_tid, responses[j], 2);
+          break;
+        }
+      }
+    }
+  }
+}
+
+} // namespace k3

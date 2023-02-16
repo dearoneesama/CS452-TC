@@ -42,6 +42,12 @@ Reply:
     svc SYSCALLN_REPLY
     ret
 
+.global AwaitEvent
+.balign 16
+AwaitEvent:
+    svc SYSCALLN_AWAITEVENT
+    ret
+
 .global Exit
 .balign 16
 Exit:
@@ -64,4 +70,16 @@ ICache:
 .balign 16
 BCache:
     svc SYSBENCHMARK_BCACHE
+    ret
+
+.global SaveThePlanet
+.balign 16
+SaveThePlanet:
+    svc SYSCALLN_SAVETHEPLANET
+    ret
+
+.global TimeDistribution
+.balign 16
+TimeDistribution:
+    svc SYSCALLN_TIMEDISTRIBUTION
     ret
