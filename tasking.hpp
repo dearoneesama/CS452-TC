@@ -12,6 +12,7 @@ namespace kernel {
     SendWait,    // sender waiting on receiver
     ReceiveWait, // receiver waiting on sender
     ReplyWait,   // sender waiting on reply
+    EventWait,   // waiting on some event
   };
 
   // Align everything to 64bit for easier time on the assembler side
@@ -57,7 +58,10 @@ namespace kernel {
     void k_send(task_descriptor *curr_task);
     void k_receive(task_descriptor *curr_task);
     void k_reply(task_descriptor *curr_task);
+    void k_await_event(task_descriptor *curr_task);
     void k_exit(task_descriptor *curr_task);
+
+    void wake_up_tasks_on_event(int event_id, int return_value);
 
     // configure hardware cache (performance syscalls)
     void kp_dcache(task_descriptor *curr_task);
@@ -76,5 +80,7 @@ namespace kernel {
     task_reuse_status task_reuse_statuses[MAX_NUM_TASKS];
     // mailboxes for message passing
     troll::queue<task_descriptor> mailboxes[MAX_NUM_TASKS];
+    // event queues
+    troll::queue<task_descriptor> event_queues[MAX_NUM_EVENTS];
   };
 }  // namespace kernel

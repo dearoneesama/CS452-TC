@@ -1,14 +1,17 @@
 #pragma once
 
-#define SYSCALLN_CREATE				1
-#define SYSCALLN_MYTID				2
-#define SYSCALLN_MYPARENTTID	3
-#define SYSCALLN_YIELD				4
-#define SYSCALLN_SEND 5
-#define SYSCALLN_RECEIVE 6
-#define SYSCALLN_REPLY 7
-#define SYSCALLN_EXIT					8
-#define SYSBENCHMARK_DCACHE		9
-#define SYSBENCHMARK_ICACHE		10
-#define SYSBENCHMARK_BCACHE		11
-#define SYSCALLN_INVALID			(SYSCALLN_EXIT + 1)
+#define SYSCALLN_CREATE           1
+#define SYSCALLN_MYTID            2
+#define SYSCALLN_MYPARENTTID      3
+#define SYSCALLN_YIELD            4
+#define SYSCALLN_SEND             5
+#define SYSCALLN_RECEIVE          6
+#define SYSCALLN_REPLY            7
+#define SYSCALLN_AWAITEVENT       8
+#define SYSBENCHMARK_DCACHE       9
+#define SYSBENCHMARK_ICACHE       10
+#define SYSBENCHMARK_BCACHE       11
+#define SYSCALLN_SAVETHEPLANET    12
+#define SYSCALLN_TIMEDISTRIBUTION 13
+#define SYSCALLN_EXIT             14
+#define SYSCALLN_INVALID			    (SYSCALLN_EXIT + 1)

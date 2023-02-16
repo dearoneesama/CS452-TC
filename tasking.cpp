@@ -52,6 +52,7 @@ task_descriptor *task_manager::new_task(tid_t parent_tid, size_t parent_generati
   task_reuse_statuses[i].free = 0;
   // point to end of stack space since it grows backward
   task->context.stack_pointer = reinterpret_cast<uint64_t>(stack_buff + (i + 1) * TASK_STACK_SIZE);
+  task->context.spsr = 0; // make sure to not mask irq
   return task;
 }
 
@@ -70,7 +71,7 @@ void task_manager::k_create(task_descriptor *curr_task) {
 
   // check priority
   auto priority = static_cast<priority_t>(curr_task->context.registers[0]);
-  if (!(PRIORITY_L0 <= priority && priority < PRIORITY_UNDEFINED)) {
+  if (!(PRIORITY_IDLE <= priority && priority < PRIORITY_UNDEFINED)) {
     curr_task->context.registers[0] = -1;
     ready_push(curr_task);
     return;
@@ -85,7 +86,6 @@ void task_manager::k_create(task_descriptor *curr_task) {
   auto *new_task = this->new_task(curr_task->tid, task_reuse_statuses[curr_task->tid - 2].gen, priority);
   new_task->context.exception_lr = reinterpret_cast<uint64_t>(task_wrapper);
   new_task->context.registers[0] = curr_task->context.registers[1]; // the actual function
-  new_task->context.spsr = 0;
 
   // return the new task's tid to the current task
   curr_task->context.registers[0] = new_task->tid;
@@ -186,6 +186,28 @@ void task_manager::k_reply(task_descriptor *curr_task) {
   reply_message(sender_task, curr_task);
   ready_push(sender_task);
   ready_push(curr_task);
+}
+
+void task_manager::k_await_event(task_descriptor *curr_task) {
+  size_t event_id = curr_task->context.registers[0];
+  if (event_id < MAX_NUM_EVENTS) {
+    event_queues[event_id].push(*curr_task);
+  } else {
+    curr_task->context.registers[0] = -1;
+    ready_push(curr_task);
+  }
+}
+
+void task_manager::wake_up_tasks_on_event(int event_id, int return_value) {
+  auto& event_queue = event_queues[event_id];
+  if (!event_queue.size()) {
+    DEBUG_LITERAL("[kernel] no task is waiting on event!\r\n");
+  }
+  while (event_queue.size()) {
+    auto& task = event_queue.pop();
+    task.context.registers[0] = return_value;
+    ready_push(&task);
+  }
 }
 
 void task_manager::kp_dcache(task_descriptor *curr_task) {
