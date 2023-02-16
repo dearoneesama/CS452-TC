@@ -313,19 +313,42 @@ void first_user_task() {
 
 namespace k3 {
 
-void idle() {
+void idle_task() {
+  struct time_percentage_t {
+    uint32_t kernel;
+    uint32_t user;
+    uint32_t idle;
+  };
+
+  time_percentage_t prev_percentages = {0, 0, 0};
+  time_percentage_t curr_percentages = {0, 0, 0};
   time_distribution_t td = {0, 0, 0};
   char buffer[128];
   const char* format = "\0337\033[1;80H\033[KKernel: {}%  User: {}%  Idle: {}%\r\n\0338";
   size_t len;
+  size_t entries = 10;
   while (1) {
-    TimeDistribution(&td);
-    len = troll::snformat(buffer, format,
-      (td.kernel_ticks * 100) / td.total_ticks,
-      ((td.total_ticks - td.kernel_ticks - td.idle_ticks) * 100) / td.total_ticks,
-      (td.idle_ticks * 100) / td.total_ticks
-    );
-    uart_puts(0, 0, buffer, len);
+    --entries;
+    // only print every 10 entries to the idle task to save the planet even more
+    if (entries == 0) {
+      entries = 10;
+      TimeDistribution(&td);
+      curr_percentages.kernel = (td.kernel_ticks * 100) / td.total_ticks;
+      curr_percentages.user = ((td.total_ticks - td.kernel_ticks - td.idle_ticks) * 100) / td.total_ticks;
+      curr_percentages.idle = (td.idle_ticks * 100) / td.total_ticks;
+
+      // only print if the percentages are different
+      if (curr_percentages.idle != prev_percentages.idle ||
+          curr_percentages.user != prev_percentages.user || 
+          curr_percentages.kernel != prev_percentages.kernel) {
+        len = troll::snformat(buffer, format,
+          curr_percentages.kernel,
+          curr_percentages.user,
+          curr_percentages.idle);
+        uart_puts(0, 0, buffer, len);
+        prev_percentages = curr_percentages;
+      }
+    }
     SaveThePlanet();
   }
 }
@@ -357,7 +380,7 @@ void clock_client() {
 
 void first_user_task() {
   Create(PRIORITY_L1, nameserver);
-  Create(PRIORITY_IDLE, idle);
+  Create(PRIORITY_IDLE, idle_task);
   Create(PRIORITY_L1, clockserver);
   Create(PRIORITY_L1, clocknotifier);
 
