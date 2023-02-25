@@ -74,13 +74,11 @@ namespace troll {
     return snformat(dest, N, format, args...);
   }
 
-  /**
-   * bug: extra copy required.
-  */
   template<size_t N, class ...Args>
   constexpr inline ::etl::string<N> sformat(const char *format, const Args &...args) {
-    char buf[N + 1];
-    snformat(buf, format, args...);
+    ::etl::string<N> buf;
+    auto sz = snformat(buf.data(), N + 1, format, args...);
+    buf.uninitialized_resize(sz);
     return buf;
   }
 
@@ -111,13 +109,11 @@ namespace troll {
     dest[DestPadLen - 1] = '\0';
   }
 
-  /**
-   * bug: extra copy required.
-   */
   template<size_t DestPadLen>
   constexpr ::etl::string<DestPadLen> pad(::etl::string_view src, padding p, char padchar = ' ') {
-    char buf[DestPadLen + 1];
-    pad(buf, DestPadLen, src.data(), src.size(), p, padchar);
+    ::etl::string<DestPadLen> buf;
+    pad(buf.data(), DestPadLen, src.data(), src.size(), p, padchar);
+    buf.uninitialized_resize(DestPadLen);
     return buf;
   }
 
