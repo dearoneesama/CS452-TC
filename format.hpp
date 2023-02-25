@@ -92,12 +92,12 @@ namespace troll {
 
   /**
    * pads the string to the specified length. the function writes to every character in the dest
-   * buffer of length destlen and does not overflow it. this overload does not output the
+   * buffer of length dest_pad_len and does not overflow it. this overload does not output the
    * terminating \0.
    * 
    * src: note ansi codes (colors) are not supported.
   */
-  void pad(char *dest, size_t destlen, const char *src, size_t srclen, padding p, char padchar = ' ');
+  void pad(char *__restrict__ dest, size_t dest_pad_len, const char *__restrict__ src, size_t srclen, padding p, char padchar = ' ');
 
   /**
    * pads the string to the specified length. the function writes to every character in the dest
@@ -105,15 +105,15 @@ namespace troll {
    * 
    * src: note ansi codes (colors) are not supported.
   */
-  template<size_t DestLen, size_t SrcLen>
-  constexpr void pad(char (&dest)[DestLen], const char (&src)[SrcLen], padding p, char padchar = ' ') {
-    pad(dest, DestLen - 1, src, SrcLen - 1, p, padchar);
-    dest[DestLen - 1] = '\0';
+  template<size_t DestPadLen, size_t SrcLen>
+  constexpr void pad(char (&dest)[DestPadLen], const char (&src)[SrcLen], padding p, char padchar = ' ') {
+    pad(dest, DestPadLen - 1, src, SrcLen - 1, p, padchar);
+    dest[DestPadLen - 1] = '\0';
   }
 
-  template<size_t DestLen>
-  constexpr void pad(::etl::string<DestLen> &dest, ::etl::string_view src, padding p, char padchar = ' ') {
-    return pad(dest.data(), DestLen, src.data(), src.size(), p, padchar);
+  template<size_t DestPadLen>
+  constexpr void pad(::etl::string<DestPadLen> &dest, ::etl::string_view src, padding p, char padchar = ' ') {
+    return pad(dest.data(), DestPadLen, src.data(), src.size(), p, padchar);
   }
 
   /**
