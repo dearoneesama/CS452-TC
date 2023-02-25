@@ -3,6 +3,7 @@
 #include "tasking.hpp"
 #include "user.hpp"
 #include "timer.hpp"
+#include "format.hpp"
 #include "irq.include"
 
 void initialize() {

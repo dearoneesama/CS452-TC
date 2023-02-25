@@ -47,15 +47,6 @@ static constexpr size_t MAX_NUM_EVENTS = 1;
 
 #include "user_syscall.include"
 
-// screen-printing utilities
-#define LEN_LITERAL(x) (sizeof(x) / sizeof(x[0]) - 1)
-
-#define SC_CLRSCR "\033[1;1H\033[2J"  // clear entire screen
-#define SC_MOVSCR "\033[;H"           // move cursor to the top
-#define SC_CLRLNE "\033[2K\r"         // clear current line
-#define SC_HIDCUR "\033[?25l"         // hide cursor
-#define SC_SHWCUR "\033[?25h"         // display cursor
-
 // hardware
 #define GET_TIMER_COUNT() (*reinterpret_cast<volatile unsigned *>(0xfe003000 + 0x04))
 

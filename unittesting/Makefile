@@ -26,11 +26,13 @@ clean:
 $(OUTPUT)/catch_amalgamated.o: $(CATCH_DIR)/catch_amalgamated.cpp Makefile
 	$(CXX) $(CFLAGS_LIB) -MMD -MP -c $< -o $@
 
+$(OUTPUT)/format.o: ../format.cpp Makefile
+	$(CXX) $(CFLAGS_LIB) -MMD -MP -c $< -o $@
 
 $(OUTPUT)/%.o: %.cpp Makefile
 	$(CXX) $(CFLAGS) -MMD -MP -c $< -o $@
 
-$(OUTPUT)/unittest.out: $(OUTPUT)/catch_amalgamated.o $(OBJECTS)
+$(OUTPUT)/unittest.out: $(OUTPUT)/catch_amalgamated.o $(OUTPUT)/format.o $(OBJECTS)
 	$(CXX) $(CFLAGS) $^ -o $@
 
 run: $(OUTPUT) $(OUTPUT)/unittest.out
