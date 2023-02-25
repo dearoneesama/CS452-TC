@@ -111,9 +111,14 @@ namespace troll {
     dest[DestPadLen - 1] = '\0';
   }
 
+  /**
+   * bug: extra copy required.
+   */
   template<size_t DestPadLen>
-  constexpr void pad(::etl::string<DestPadLen> &dest, ::etl::string_view src, padding p, char padchar = ' ') {
-    return pad(dest.data(), DestPadLen, src.data(), src.size(), p, padchar);
+  constexpr ::etl::string<DestPadLen> pad(::etl::string_view src, padding p, char padchar = ' ') {
+    char buf[DestPadLen + 1];
+    pad(buf, DestPadLen, src.data(), src.size(), p, padchar);
+    return buf;
   }
 
   /**

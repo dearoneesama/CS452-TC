@@ -68,6 +68,10 @@ TEST_CASE("pad string usage", "pad") {
     troll::pad(s, "12345123456", troll::padding::right, '.');
     REQUIRE(etl::string_view{s} == "123451");
   }
+
+  SECTION("pad right etl") {
+    REQUIRE(troll::pad<10>("123456789", troll::padding::right) == " 123456789");
+  }
 }
 
 TEST_CASE("tabulate 1d usage", "[tabulate1d]") {
