@@ -104,7 +104,7 @@ namespace troll {
    * src: note ansi codes (colors) are not supported.
   */
   template<size_t DestPadLen, size_t SrcLen>
-  constexpr void pad(char (&dest)[DestPadLen], const char (&src)[SrcLen], padding p, char padchar = ' ') {
+  constexpr void pad(char (& __restrict__ dest)[DestPadLen], const char (& __restrict__ src)[SrcLen], padding p, char padchar = ' ') {
     pad(dest, DestPadLen - 1, src, SrcLen - 1, p, padchar);
     dest[DestPadLen - 1] = '\0';
   }
@@ -116,6 +116,134 @@ namespace troll {
     buf.uninitialized_resize(DestPadLen);
     return buf;
   }
+
+  enum class ansi_font: uint8_t {
+    none          = 0,            // enabler,    disabler
+    bold          = 0b0000'0001,  // "\033[1m", "\033[22m"
+    dim           = 0b0000'0010,  // "\033[2m", "\033[22m"
+    italic        = 0b0000'0100,  // "\033[3m", "\033[23m"
+    underline     = 0b0000'1000,  // "\033[4m", "\033[24m"
+    blink         = 0b0001'0000,  // "\033[5m", "\033[25m"
+    reverse       = 0b0010'0000,  // "\033[7m", "\033[27m"
+    hidden        = 0b0100'0000,  // "\033[8m", "\033[28m"
+    strikethrough = 0b1000'0000,  // "\033[9m", "\033[29m"
+  };
+
+  constexpr inline ansi_font operator|(ansi_font a, ansi_font b) {
+    return static_cast<ansi_font>(static_cast<uint8_t>(a) | static_cast<uint8_t>(b));
+  }
+
+  constexpr inline ansi_font operator&(ansi_font a, ansi_font b) {
+    return static_cast<ansi_font>(static_cast<uint8_t>(a) & static_cast<uint8_t>(b));
+  }
+
+  enum class ansi_color: uint8_t {
+                  // foreground, background
+    none    = 0,  // "\033[39m", "\033[49m"
+    black   = 1,  // "\033[30m", "\033[40m"
+    red     = 2,  // "\033[31m", "\033[41m"
+    green   = 3,  // "\033[32m", "\033[42m"
+    yellow  = 4,  // "\033[33m", "\033[43m"
+    blue    = 5,  // "\033[34m", "\033[44m"
+    magenta = 6,  // "\033[35m", "\033[45m"
+    cyan    = 7,  // "\033[36m", "\033[46m"
+    white   = 8,  // "\033[37m", "\033[47m"
+  };
+
+  /**
+   * a compile-time object that holds ansi style options and does escape string
+   * things.
+   */
+  template<ansi_font Font = ansi_font::none, ansi_color FgColor = ansi_color::none, ansi_color BgColor = ansi_color::none>
+  struct static_ansi_style_options {
+    static constexpr auto font = Font;
+    static constexpr auto fg_color = FgColor;
+    static constexpr auto bg_color = BgColor;
+
+  private:
+    static constexpr size_t num_params_
+      = __builtin_popcount(static_cast<uint8_t>(font))
+      + (fg_color == ansi_color::none ? 0 : 1)
+      + (bg_color == ansi_color::none ? 0 : 1);
+    static constexpr size_t num_semicolons_ = num_params_ ? num_params_ - 1 : 0;
+
+    static char *write_to(char *dest, const char *src) {
+      while (*src) *dest++ = *src++;
+      return dest;
+    }
+
+  public:
+    // the size of the escape string used to start the style (excluding \0).
+    static constexpr size_t enabler_str_size
+      = (num_params_ ? (LEN_LITERAL("\033[m")
+      + __builtin_popcount(static_cast<uint8_t>(font)) * 1
+      + (fg_color == ansi_color::none ? 0 : 2)
+      + (bg_color == ansi_color::none ? 0 : 2)
+      + num_semicolons_) : 0);
+
+    // the escape string used to start the style.
+    static ::etl::string_view enabler_str() {
+      static char buf[enabler_str_size + 1] = "";
+
+      if (!*buf && num_params_) {
+        char *p = buf;
+        p = write_to(p, "\033[");
+        // font
+        if ((font & ansi_font::bold) == ansi_font::bold)                   p = write_to(p, "1;");
+        if ((font & ansi_font::dim) == ansi_font::dim)                     p = write_to(p, "2;");
+        if ((font & ansi_font::italic) == ansi_font::italic)               p = write_to(p, "3;");
+        if ((font & ansi_font::underline) == ansi_font::underline)         p = write_to(p, "4;");
+        if ((font & ansi_font::blink) == ansi_font::blink)                 p = write_to(p, "5;");
+        if ((font & ansi_font::reverse) == ansi_font::reverse)             p = write_to(p, "7;");
+        if ((font & ansi_font::hidden) == ansi_font::hidden)               p = write_to(p, "8;");
+        if ((font & ansi_font::strikethrough) == ansi_font::strikethrough) p = write_to(p, "9;");
+        // fg color
+        switch (fg_color) {
+          case ansi_color::black:   p = write_to(p, "30;"); break;
+          case ansi_color::red:     p = write_to(p, "31;"); break;
+          case ansi_color::green:   p = write_to(p, "32;"); break;
+          case ansi_color::yellow:  p = write_to(p, "33;"); break;
+          case ansi_color::blue:    p = write_to(p, "34;"); break;
+          case ansi_color::magenta: p = write_to(p, "35;"); break;
+          case ansi_color::cyan:    p = write_to(p, "36;"); break;
+          case ansi_color::white:   p = write_to(p, "37;"); break;
+          default: break;
+        }
+        // bg color
+        switch (bg_color) {
+          case ansi_color::black:   p = write_to(p, "40;"); break;
+          case ansi_color::red:     p = write_to(p, "41;"); break;
+          case ansi_color::green:   p = write_to(p, "42;"); break;
+          case ansi_color::yellow:  p = write_to(p, "43;"); break;
+          case ansi_color::blue:    p = write_to(p, "44;"); break;
+          case ansi_color::magenta: p = write_to(p, "45;"); break;
+          case ansi_color::cyan:    p = write_to(p, "46;"); break;
+          case ansi_color::white:   p = write_to(p, "47;"); break;
+          default: break;
+        }
+        if (*(p - 1) == ';') --p;
+        if (num_params_) *p++ = 'm';
+        *p = '\0';
+      }
+
+      return {buf, enabler_str_size};
+    }
+
+    // the size of the escape string used to end the style (excluding \0).
+    // we are just using the reset escape string for now.
+    static constexpr size_t disabler_str_size = num_params_ ? LEN_LITERAL("\033[0m") : 0;
+
+    // the escape string used to end the style.
+    static ::etl::string_view disabler_str() {
+      static char buf[disabler_str_size + 1] = "";
+      if (!*buf && num_params_)
+        write_to(buf, "\033[0m");
+      return {buf, disabler_str_size};
+    }
+
+    // the number of extra characters needed to wrap any string with the style.
+    static constexpr size_t wrapper_str_size = enabler_str_size + disabler_str_size;
+  };
 
   /**
    * single-use iterator to tabulate text. it outputs text line by line.

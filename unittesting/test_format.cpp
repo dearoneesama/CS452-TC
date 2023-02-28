@@ -74,6 +74,40 @@ TEST_CASE("pad string usage", "pad") {
   }
 }
 
+TEST_CASE("static_ansi_style_options usage", "[static_ansi_style_options]") {
+  SECTION("usual usage") {
+    using styles = troll::static_ansi_style_options<
+      troll::ansi_font::bold | troll::ansi_font::italic | troll::ansi_font::underline,
+      troll::ansi_color::red
+    >;
+    REQUIRE(styles::enabler_str_size == 11);
+    REQUIRE(styles::enabler_str() == "\033[1;3;4;31m");
+    REQUIRE(styles::enabler_str() == "\033[1;3;4;31m");
+    REQUIRE(styles::disabler_str_size == 4);
+    REQUIRE(styles::disabler_str() == "\033[0m");
+  }
+
+  SECTION("only one bg style") {
+    using styles = troll::static_ansi_style_options<
+      troll::ansi_font::none,
+      troll::ansi_color::none,
+      troll::ansi_color::cyan
+    >;
+    REQUIRE(styles::enabler_str_size == 5);
+    REQUIRE(styles::enabler_str() == "\033[46m");
+    REQUIRE(styles::disabler_str_size == 4);
+    REQUIRE(styles::disabler_str() == "\033[0m");
+  }
+
+  SECTION("no styles") {
+    using styles = troll::static_ansi_style_options<>;
+    REQUIRE(styles::enabler_str_size == 0);
+    REQUIRE(styles::enabler_str() == "");
+    REQUIRE(styles::disabler_str_size == 0);
+    REQUIRE(styles::disabler_str() == "");
+  }
+}
+
 TEST_CASE("tabulate 1d usage", "[tabulate1d]") {
   SECTION("truncate only element") {
     const char *titles[] = {"TooLongTitle"};
