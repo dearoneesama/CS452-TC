@@ -473,8 +473,6 @@ private:
 
       friend class tabulate;
       iterator(tabulate *tab) : that_{tab} {}
-      iterator(const iterator &) = delete;
-      iterator &operator=(const iterator &) = delete;
       tabulate *that_;
     };
 

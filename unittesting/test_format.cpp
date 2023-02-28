@@ -1,6 +1,7 @@
 #include <catch_amalgamated.hpp>
 #include <etl/string_view.h>
 #include "../format.hpp"
+#include "../utils.hpp"
 
 TEST_CASE("sformat usage", "[format]") {
   char s[50];
@@ -187,6 +188,33 @@ R"(+----------------------------+
       "\033[34m+------------------------------------------------------------------------------------------+\033[0m\n"
       "\033[34m|\033[0m  elem1     tita1     tita2     titb3     titc4     titx5     titw6     tita7     titu8   \033[34m|\033[0m\n"
       "\033[34m+------------------------------------------------------------------------------------------+\033[0m\n";
+    compare(tab, expected);
+  }
+
+  SECTION("use with range transform") {
+    struct {
+      int a, b, c;
+    } data[] = {{1, 2, 3}, {4, 5, 6}, {7, 8, 9}};
+    auto get_a = troll::it_transform(data, data + 2, [](auto &e) { return e.a; });
+    auto get_b = troll::it_transform(data, data + 2, [](auto &e) { return e.b; });
+    auto get_c = troll::it_transform(data, data + 2, [](auto &e) { return e.c; });
+    auto tab = troll::make_tabulate<50, 7>(
+      3,
+      troll::static_ansi_style_options<>{},
+      troll::tabulate_title_row_args{"", get_a.begin(), get_a.end(), troll::static_ansi_style_options<>{}},
+      troll::tabulate_elem_row_args{"", get_b.begin(), troll::static_ansi_style_options<>{}},
+      troll::tabulate_elem_row_args{"", get_c.begin(), troll::static_ansi_style_options<>{}}
+    );
+
+    const char expected[] =
+R"(+---------------------+
+|   1      4      7   |
++---------------------+
+|   2      5      8   |
++---------------------+
+|   3      6      9   |
++---------------------+
+)";
     compare(tab, expected);
   }
 }
