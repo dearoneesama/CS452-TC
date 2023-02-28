@@ -242,65 +242,113 @@ namespace troll {
     static constexpr size_t wrapper_str_size = enabler_str_size + disabler_str_size;
   };
 
-  template<class Heading, class TitleIt, class Style>
+  using static_ansi_style_options_none_t = static_ansi_style_options<>;
+  static constexpr static_ansi_style_options_none_t static_ansi_style_options_none{};
+
+  template<class Heading, class TitleIt, class HeadingStyle, class TitleStyle>
   struct tabulate_title_row_args {
     using heading_type = Heading;
     using title_it_type = TitleIt;
-    using style_type = Style;
+    using heading_style_type = HeadingStyle;
+    using title_style_type = TitleStyle;
+    static constexpr bool style_is_same = std::is_same_v<HeadingStyle, TitleStyle>;
     // the heading (first column) used for the title row
     Heading heading;
     // title range
     TitleIt begin, end;
-    Style style;
+
+    // apply different styles on heading (left) and real titles
+    template<class Hding, class It1, class It2>
+    constexpr tabulate_title_row_args(Hding &&heading, It1 &&begin, It2 &&end, HeadingStyle, TitleStyle)
+      : heading{std::forward<Hding>(heading)}, begin{std::forward<It1>(begin)}, end{std::forward<It2>(end)} {}
+
+    // apply the same style on heading (left) and real titles
+    template<class Hding, class It1, class It2>
+    constexpr tabulate_title_row_args(Hding &&heading, It1 &&begin, It2 &&end, TitleStyle)
+      : heading{std::forward<Hding>(heading)}, begin{std::forward<It1>(begin)}, end{std::forward<It2>(end)} {}
+
+    // no heading
+    template<class It1, class It2>
+    constexpr tabulate_title_row_args(It1 &&begin, It2 &&end, TitleStyle)
+      : heading{""}, begin{std::forward<It1>(begin)}, end{std::forward<It2>(end)} {}
   };
 
-  template<class Heading, class TitleIt, class Style>
-  tabulate_title_row_args(Heading, TitleIt, TitleIt, Style) -> tabulate_title_row_args<Heading, TitleIt, Style>;
+  template<class Heading, class TitleIt, class HeadingStyle, class TitleStyle>
+  tabulate_title_row_args(Heading, TitleIt, TitleIt, HeadingStyle, TitleStyle) -> tabulate_title_row_args<Heading, TitleIt, HeadingStyle, TitleStyle>;
 
-  template<class Heading, class ElemIt, class Style>
+  template<class Heading, class TitleIt, class TitleStyle>
+  tabulate_title_row_args(Heading, TitleIt, TitleIt, TitleStyle) -> tabulate_title_row_args<Heading, TitleIt, TitleStyle, TitleStyle>;
+
+  template<class TitleIt, class TitleStyle>
+  tabulate_title_row_args(TitleIt, TitleIt, TitleStyle) -> tabulate_title_row_args<const char *, TitleIt, TitleStyle, TitleStyle>;
+
+  template<class Heading, class ElemIt, class HeadingStyle, class ElemStyle>
   struct tabulate_elem_row_args {
     using heading_type = Heading;
     using elem_it_type = ElemIt;
-    using style_type = Style;
+    using heading_style_type = HeadingStyle;
+    using elem_style_type = ElemStyle;
+    static constexpr bool style_is_same = std::is_same_v<HeadingStyle, ElemStyle>;
     // the heading (first column) used for the element row
     Heading heading;
     // element range
     ElemIt begin;
-    Style style;
+
+    // apply different styles on heading (left) and real elements
+    template<class Hding, class It>
+    constexpr tabulate_elem_row_args(Hding &&heading, It &&begin, HeadingStyle, ElemStyle)
+      : heading{std::forward<Hding>(heading)}, begin{std::forward<It>(begin)} {}
+
+    // apply the same style on heading (left) and real elements
+    template<class Hding, class It>
+    constexpr tabulate_elem_row_args(Hding &&heading, It &&begin, ElemStyle)
+      : heading{std::forward<Hding>(heading)}, begin{std::forward<It>(begin)} {}
+
+    // no heading
+    template<class It>
+    constexpr tabulate_elem_row_args(It &&begin, ElemStyle)
+      : heading{""}, begin{std::forward<It>(begin)} {}
   };
 
-  template<class Heading, class ElemIt, class Style>
-  tabulate_elem_row_args(Heading, ElemIt, Style) -> tabulate_elem_row_args<Heading, ElemIt, Style>;
+  template<class Heading, class ElemIt, class HeadingStyle, class ElemStyle>
+  tabulate_elem_row_args(Heading, ElemIt, HeadingStyle, ElemStyle) -> tabulate_elem_row_args<Heading, ElemIt, HeadingStyle, ElemStyle>;
+
+  template<class Heading, class ElemIt, class ElemStyle>
+  tabulate_elem_row_args(Heading, ElemIt, ElemStyle) -> tabulate_elem_row_args<Heading, ElemIt, ElemStyle, ElemStyle>;
+
+  template<class ElemIt, class ElemStyle>
+  tabulate_elem_row_args(ElemIt, ElemStyle) -> tabulate_elem_row_args<const char *, ElemIt, ElemStyle, ElemStyle>;
 
   /**
    * single-use iterator to tabulate text. it outputs text line by line.
-   * 
-   * the MaxLineWidth needs to be sufficiently big to hold enough elements per row.
    */
-  template<size_t MaxLineWidth, size_t Pad, class DividerStyle, class TitleRowArgs, class ...ElemRowArgs>
+  template<size_t ElemsPerRow, size_t HeadingPadding, size_t ContentPadding, class DividerStyle, class TitleRowArgs, class ...ElemRowArgs>
   class tabulate {
   public:
     using size_type = size_t;
-    static constexpr size_type max_line_width = MaxLineWidth;
-    static constexpr size_type pad = Pad;
     using divider_style_type = DividerStyle;
     using title_row_args_type = TitleRowArgs;
     using elem_row_args_type = std::tuple<ElemRowArgs...>;
     static constexpr size_type num_elem_row_args = sizeof...(ElemRowArgs);
+
+    static constexpr size_type elems_per_row = ElemsPerRow;
+    static constexpr size_type heading_padding = HeadingPadding;
+    static constexpr size_type content_padding = ContentPadding;
+    // calculated based on the number of elements per row and formatting, excluding escapes.
+    static constexpr size_type max_line_width = HeadingPadding + ElemsPerRow * ContentPadding + 10/*safety*/;
 
     char divider_horizontal = '-';
     char divider_vertical = '|';
     char divider_cross = '+';
 
     template<class Tit, class ...Elems>
-    constexpr tabulate(size_type elems_per_row, Tit &&title, Elems &&...elems)
-      : elems_per_row_{elems_per_row}
-      , title_row_args_{std::forward<Tit>(title)}
+    constexpr tabulate(Tit &&title, Elems &&...elems)
+      : title_row_args_{std::forward<Tit>(title)}
       , elem_row_args_{std::forward<Elems>(elems)...}
     {
-      auto title_heading = sformat<pad>("{}", title_row_args_.heading);
+      auto title_heading = sformat<heading_padding>("{}", title_row_args_.heading);
       has_heading_ = title_heading.size();
-      auto total_pad = elems_per_row_ * pad + (has_heading_ ? pad : 0);
+      auto total_pad = elems_per_row * content_padding + (has_heading_ ? heading_padding : 0);
       // write the divider line
       char *p = divider_text_;
       p = strcontcpy(p, divider_style_type::enabler_str().data());
@@ -318,14 +366,25 @@ namespace troll {
       p = strcontcpy(p, divider_style_type::enabler_str().data());
       *p++ = divider_vertical;
       p = strcontcpy(p, divider_style_type::disabler_str().data());
-      p = strcontcpy(p, title_row_args_.style.enabler_str().data());
-      if (has_heading_) {
-        troll::pad(p, pad, title_heading.data(), title_heading.size(), padding::middle);
-        p += pad;
+
+      if constexpr (title_row_args_type::style_is_same) {
+        p = strcontcpy(p, title_row_args_type::title_style_type::enabler_str().data());
+        if (has_heading_) {
+          troll::pad(p, heading_padding, title_heading.data(), title_heading.size(), padding::middle);
+          p += heading_padding;
+        }
+      } else {
+        if (has_heading_) {
+          p = strcontcpy(p, title_row_args_type::heading_style_type::enabler_str().data());
+          troll::pad(p, heading_padding, title_heading.data(), title_heading.size(), padding::middle);
+          p += heading_padding;
+          p = strcontcpy(p, title_row_args_type::heading_style_type::disabler_str().data());
+        }
+        p = strcontcpy(p, title_row_args_type::title_style_type::enabler_str().data());
       }
       title_begin_ = p;
-      p += elems_per_row_ * pad;
-      p = strcontcpy(p, title_row_args_.style.disabler_str().data());
+      p += elems_per_row * content_padding;
+      p = strcontcpy(p, title_row_args_type::title_style_type::disabler_str().data());
       p = strcontcpy(p, divider_style_type::enabler_str().data());
       *p++ = divider_vertical;
       p = strcontcpy(p, divider_style_type::disabler_str().data());
@@ -344,20 +403,32 @@ namespace troll {
     template<size_type I>
     void prepare_elem_row_() {
       auto &args = std::get<I>(elem_row_args_);
+      using ArgT = std::decay_t<decltype(args)>;
       char *p = std::get<I>(elem_texts_);
       troll::pad(p, sizeof std::get<I>(elem_texts_), "", 0, padding::left);
       p = strcontcpy(p, divider_style_type::enabler_str().data());
       *p++ = divider_vertical;
       p = strcontcpy(p, divider_style_type::disabler_str().data());
-      p = strcontcpy(p, args.style.enabler_str().data());
-      if (has_heading_) {
-        auto heading = sformat<pad>("{}", args.heading);
-        troll::pad(p, pad, heading.data(), heading.size(), padding::middle);
-        p += pad;
+      auto heading = sformat<heading_padding>("{}", args.heading);
+
+      if constexpr (ArgT::style_is_same) {
+        p = strcontcpy(p, ArgT::elem_style_type::enabler_str().data());
+        if (has_heading_) {
+          troll::pad(p, heading_padding, heading.data(), heading.size(), padding::middle);
+          p += heading_padding;
+        }
+      } else {
+        if (has_heading_) {
+          p = strcontcpy(p, ArgT::heading_style_type::enabler_str().data());
+          troll::pad(p, heading_padding, heading.data(), heading.size(), padding::middle);
+          p += heading_padding;
+          p = strcontcpy(p, ArgT::heading_style_type::disabler_str().data());
+        }
+        p = strcontcpy(p, ArgT::elem_style_type::enabler_str().data());
       }
       elem_begins_[I] = p;
-      p += elems_per_row_ * pad;
-      p = strcontcpy(p, args.style.disabler_str().data());
+      p += elems_per_row * content_padding;
+      p = strcontcpy(p, ArgT::elem_style_type::disabler_str().data());
       p = strcontcpy(p, divider_style_type::enabler_str().data());
       *p++ = divider_vertical;
       p = strcontcpy(p, divider_style_type::disabler_str().data());
@@ -414,16 +485,16 @@ namespace troll {
 
       constexpr iterator &operator++() {
         if (that_->state_ == state::top_line) {
-          char buf[pad + 1];
+          char buf[content_padding + 1];
           // write down the titles
           size_type titles = 0;
           auto &ta = that_->title_row_args_;
-          for (; ta.begin != ta.end && titles < that_->elems_per_row_; ++ta.begin, ++titles) {
-            auto sz = snformat(buf, pad + 1, "{}", *ta.begin);
-            troll::pad(that_->title_begin_ + titles * that_->pad, that_->pad, buf, sz, padding::middle);
+          for (; ta.begin != ta.end && titles < elems_per_row; ++ta.begin, ++titles) {
+            auto sz = snformat(buf, content_padding + 1, "{}", *ta.begin);
+            troll::pad(that_->title_begin_ + titles * content_padding, content_padding, buf, sz, padding::middle);
           }
           // in case row is not full
-          troll::pad(that_->title_begin_ + titles * that_->pad, that_->elems_per_row_ * that_->pad - titles * that_->pad, "", 0, padding::left);
+          troll::pad(that_->title_begin_ + titles * content_padding, elems_per_row * content_padding - titles * content_padding, "", 0, padding::left);
 
           if (titles == 0) {
             // no more
@@ -463,15 +534,15 @@ namespace troll {
 
       template<size_type I>
       void do_elem_row_(size_type titles) {
-        char buf[pad + 1];
+        char buf[content_padding + 1];
         auto &args = std::get<I>(that_->elem_row_args_);
         char *p = that_->elem_begins_[I];
         for (size_type elems = 0; elems < titles; ++args.begin, ++elems) {
-          auto sz = snformat(buf, pad + 1, "{}", *args.begin);
-          troll::pad(p + elems * that_->pad, that_->pad, buf, sz, padding::middle);
+          auto sz = snformat(buf, content_padding + 1, "{}", *args.begin);
+          troll::pad(p + elems * content_padding, content_padding, buf, sz, padding::middle);
         }
         // in case row is not full
-        troll::pad(p + titles * that_->pad, that_->elems_per_row_ * that_->pad - titles * that_->pad, "", 0, padding::left);
+        troll::pad(p + titles * content_padding, elems_per_row * content_padding - titles * content_padding, "", 0, padding::left);
       }
 
       friend class tabulate;
@@ -511,14 +582,26 @@ namespace troll {
     friend class iterator;
 
     bool has_heading_ = false;
-    size_type elems_per_row_;
     title_row_args_type title_row_args_;
     elem_row_args_type elem_row_args_;
+
     static constexpr auto divider_wrapper_size_ = divider_style_type::wrapper_str_size;
     char divider_text_[max_line_width + divider_wrapper_size_];
-    char title_text_[max_line_width + title_row_args_type::style_type::wrapper_str_size + divider_wrapper_size_ * 2];
+
+    char title_text_[  // precalculate buffer size
+      max_line_width
+      + title_row_args_type::heading_style_type::wrapper_str_size
+      + (title_row_args_type::style_is_same ? 0 : title_row_args_type::title_style_type::wrapper_str_size)
+      + divider_wrapper_size_ * 2
+    ];
     char *title_begin_ = 0;
-    std::tuple<char[max_line_width + ElemRowArgs::style_type::wrapper_str_size + divider_wrapper_size_ * 2]...> elem_texts_;
+
+    std::tuple<char[  // precalculate buffer size
+      max_line_width
+      + ElemRowArgs::heading_style_type::wrapper_str_size
+      + (ElemRowArgs::style_is_same ? 0 : ElemRowArgs::elem_style_type::wrapper_str_size)
+      + divider_wrapper_size_ * 2
+    ]...> elem_texts_;
     char *elem_begins_[num_elem_row_args ? num_elem_row_args : 1];
 
     enum class state : char {
@@ -532,12 +615,37 @@ namespace troll {
   };
 
   /**
-   * make a tabulator. refer to tests for usage.
+   * make a tabulator.
+   * template arguments:
+   *   - ElemsPerRow: the number of elements in each row
+   *   - HeadingPadding: the padding for the heading
+   *   - ContentPadding: the padding for the content between each column
+   *  arguments:
+   *   - divider_style: troll::static_ansi_style
+   *   - title_row_args: troll::tabulate_title_row_args
+   *   - elem_row_args: troll::tabulate_elem_row_args
    */
-  template<size_t MaxLineWidth, size_t Pad, class DividerStyle, class TitleRowArgs, class ...ElemRowArgs>
-  constexpr auto make_tabulate(size_t elems_per_row, DividerStyle, TitleRowArgs &&title, ElemRowArgs &&...elems) {
-    return tabulate<MaxLineWidth, Pad, DividerStyle, TitleRowArgs, ElemRowArgs...>{
-      elems_per_row, std::forward<TitleRowArgs>(title), std::forward<ElemRowArgs>(elems)...
+  template<size_t ElemsPerRow, size_t HeadingPadding, size_t ContentPadding, class DividerStyle, class TitleRowArgs, class ...ElemRowArgs>
+  constexpr auto make_tabulate(DividerStyle, TitleRowArgs &&title, ElemRowArgs &&...elems) {
+    return tabulate<ElemsPerRow, HeadingPadding, ContentPadding, DividerStyle, TitleRowArgs, ElemRowArgs...>{
+      std::forward<TitleRowArgs>(title), std::forward<ElemRowArgs>(elems)...
+    };
+  }
+
+  /**
+   * make a tabulator.
+   * template arguments:
+   *   - ElemsPerRow: the number of elements in each row
+   *   - Padding: padding between columns
+   *  arguments:
+   *   - divider_style: troll::static_ansi_style
+   *   - title_row_args: troll::tabulate_title_row_args
+   *   - elem_row_args: troll::tabulate_elem_row_args
+   */
+  template<size_t ElemsPerRow, size_t Padding, class DividerStyle, class TitleRowArgs, class ...ElemRowArgs>
+  constexpr auto make_tabulate(DividerStyle, TitleRowArgs &&title, ElemRowArgs &&...elems) {
+    return tabulate<ElemsPerRow, Padding, Padding, DividerStyle, TitleRowArgs, ElemRowArgs...>{
+      std::forward<TitleRowArgs>(title), std::forward<ElemRowArgs>(elems)...
     };
   }
 
