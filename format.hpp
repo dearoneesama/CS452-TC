@@ -14,6 +14,8 @@
 
 namespace troll {
 
+  char *strcontcpy(char *dest, const char *src) noexcept;
+
   template<class T>
   struct is_etl_string : std::false_type {};
 
@@ -167,11 +169,6 @@ namespace troll {
       + (bg_color == ansi_color::none ? 0 : 1);
     static constexpr size_t num_semicolons_ = num_params_ ? num_params_ - 1 : 0;
 
-    static char *write_to(char *dest, const char *src) {
-      while (*src) *dest++ = *src++;
-      return dest;
-    }
-
   public:
     // the size of the escape string used to start the style (excluding \0).
     static constexpr size_t enabler_str_size
@@ -187,38 +184,38 @@ namespace troll {
 
       if (!*buf && num_params_) {
         char *p = buf;
-        p = write_to(p, "\033[");
+        p = strcontcpy(p, "\033[");
         // font
-        if ((font & ansi_font::bold) == ansi_font::bold)                   p = write_to(p, "1;");
-        if ((font & ansi_font::dim) == ansi_font::dim)                     p = write_to(p, "2;");
-        if ((font & ansi_font::italic) == ansi_font::italic)               p = write_to(p, "3;");
-        if ((font & ansi_font::underline) == ansi_font::underline)         p = write_to(p, "4;");
-        if ((font & ansi_font::blink) == ansi_font::blink)                 p = write_to(p, "5;");
-        if ((font & ansi_font::reverse) == ansi_font::reverse)             p = write_to(p, "7;");
-        if ((font & ansi_font::hidden) == ansi_font::hidden)               p = write_to(p, "8;");
-        if ((font & ansi_font::strikethrough) == ansi_font::strikethrough) p = write_to(p, "9;");
+        if ((font & ansi_font::bold) == ansi_font::bold)                   p = strcontcpy(p, "1;");
+        if ((font & ansi_font::dim) == ansi_font::dim)                     p = strcontcpy(p, "2;");
+        if ((font & ansi_font::italic) == ansi_font::italic)               p = strcontcpy(p, "3;");
+        if ((font & ansi_font::underline) == ansi_font::underline)         p = strcontcpy(p, "4;");
+        if ((font & ansi_font::blink) == ansi_font::blink)                 p = strcontcpy(p, "5;");
+        if ((font & ansi_font::reverse) == ansi_font::reverse)             p = strcontcpy(p, "7;");
+        if ((font & ansi_font::hidden) == ansi_font::hidden)               p = strcontcpy(p, "8;");
+        if ((font & ansi_font::strikethrough) == ansi_font::strikethrough) p = strcontcpy(p, "9;");
         // fg color
         switch (fg_color) {
-          case ansi_color::black:   p = write_to(p, "30;"); break;
-          case ansi_color::red:     p = write_to(p, "31;"); break;
-          case ansi_color::green:   p = write_to(p, "32;"); break;
-          case ansi_color::yellow:  p = write_to(p, "33;"); break;
-          case ansi_color::blue:    p = write_to(p, "34;"); break;
-          case ansi_color::magenta: p = write_to(p, "35;"); break;
-          case ansi_color::cyan:    p = write_to(p, "36;"); break;
-          case ansi_color::white:   p = write_to(p, "37;"); break;
+          case ansi_color::black:   p = strcontcpy(p, "30;"); break;
+          case ansi_color::red:     p = strcontcpy(p, "31;"); break;
+          case ansi_color::green:   p = strcontcpy(p, "32;"); break;
+          case ansi_color::yellow:  p = strcontcpy(p, "33;"); break;
+          case ansi_color::blue:    p = strcontcpy(p, "34;"); break;
+          case ansi_color::magenta: p = strcontcpy(p, "35;"); break;
+          case ansi_color::cyan:    p = strcontcpy(p, "36;"); break;
+          case ansi_color::white:   p = strcontcpy(p, "37;"); break;
           default: break;
         }
         // bg color
         switch (bg_color) {
-          case ansi_color::black:   p = write_to(p, "40;"); break;
-          case ansi_color::red:     p = write_to(p, "41;"); break;
-          case ansi_color::green:   p = write_to(p, "42;"); break;
-          case ansi_color::yellow:  p = write_to(p, "43;"); break;
-          case ansi_color::blue:    p = write_to(p, "44;"); break;
-          case ansi_color::magenta: p = write_to(p, "45;"); break;
-          case ansi_color::cyan:    p = write_to(p, "46;"); break;
-          case ansi_color::white:   p = write_to(p, "47;"); break;
+          case ansi_color::black:   p = strcontcpy(p, "40;"); break;
+          case ansi_color::red:     p = strcontcpy(p, "41;"); break;
+          case ansi_color::green:   p = strcontcpy(p, "42;"); break;
+          case ansi_color::yellow:  p = strcontcpy(p, "43;"); break;
+          case ansi_color::blue:    p = strcontcpy(p, "44;"); break;
+          case ansi_color::magenta: p = strcontcpy(p, "45;"); break;
+          case ansi_color::cyan:    p = strcontcpy(p, "46;"); break;
+          case ansi_color::white:   p = strcontcpy(p, "47;"); break;
           default: break;
         }
         if (*(p - 1) == ';') --p;
@@ -237,7 +234,7 @@ namespace troll {
     static ::etl::string_view disabler_str() {
       static char buf[disabler_str_size + 1] = "";
       if (!*buf && num_params_)
-        write_to(buf, "\033[0m");
+        strcontcpy(buf, "\033[0m");
       return {buf, disabler_str_size};
     }
 
@@ -245,34 +242,130 @@ namespace troll {
     static constexpr size_t wrapper_str_size = enabler_str_size + disabler_str_size;
   };
 
+  template<class Heading, class TitleIt, class Style>
+  struct tabulate_title_row_args {
+    using heading_type = Heading;
+    using title_it_type = TitleIt;
+    using style_type = Style;
+    // the heading (first column) used for the title row
+    Heading heading;
+    // title range
+    TitleIt begin, end;
+    Style style;
+  };
+
+  template<class Heading, class TitleIt, class Style>
+  tabulate_title_row_args(Heading, TitleIt, TitleIt, Style) -> tabulate_title_row_args<Heading, TitleIt, Style>;
+
+  template<class Heading, class ElemIt, class Style>
+  struct tabulate_elem_row_args {
+    using heading_type = Heading;
+    using elem_it_type = ElemIt;
+    using style_type = Style;
+    // the heading (first column) used for the element row
+    Heading heading;
+    // element range
+    ElemIt begin;
+    Style style;
+  };
+
+  template<class Heading, class ElemIt, class Style>
+  tabulate_elem_row_args(Heading, ElemIt, Style) -> tabulate_elem_row_args<Heading, ElemIt, Style>;
+
   /**
    * single-use iterator to tabulate text. it outputs text line by line.
    * 
    * the MaxLineWidth needs to be sufficiently big to hold enough elements per row.
    */
-  template<size_t MaxLineWidth, size_t Pad, class TitleIt, class ElemsIt>
-  class tabulate_1d {
+  template<size_t MaxLineWidth, size_t Pad, class DividerStyle, class TitleRowArgs, class ...ElemRowArgs>
+  class tabulate {
   public:
     using size_type = size_t;
     static constexpr size_type max_line_width = MaxLineWidth;
     static constexpr size_type pad = Pad;
+    using divider_style_type = DividerStyle;
+    using title_row_args_type = TitleRowArgs;
+    using elem_row_args_type = std::tuple<ElemRowArgs...>;
+    static constexpr size_type num_elem_row_args = sizeof...(ElemRowArgs);
 
-    /**
-     * - t_begin: start of title range
-     * - t_end: end of title range
-     * - e_begin: start of element range. this assumes the number of elements equal that of titles
-     * - elems_row: number of elements per row. nonzero.
-     */
-    constexpr tabulate_1d(TitleIt t_begin, TitleIt t_end, ElemsIt e_begin, size_type elems_row)
-      : t_begin_{t_begin}, t_end_{t_end}, e_begin_{e_begin}, elems_row_{elems_row} {
-      troll::pad(bar_text_, pad * elems_row + 2, "", 0, padding::left, '-');
-      // extra + at both sides
-      bar_text_[0] = '+';
-      bar_text_[pad * elems_row + 1] = '+';
-      bar_text_[pad * elems_row + 2] = '\0';
+    char divider_horizontal = '-';
+    char divider_vertical = '|';
+    char divider_cross = '+';
+
+  template<class Tit, class ...Elems>
+  constexpr tabulate(size_type elems_per_row, Tit &&title, Elems &&...elems)
+    : elems_per_row_{elems_per_row}
+    , title_row_args_{std::forward<Tit>(title)}
+    , elem_row_args_{std::forward<Elems>(elems)...}
+  {
+    auto title_heading = sformat<pad>("{}", title_row_args_.heading);
+    has_heading_ = title_heading.size();
+    auto total_pad = elems_per_row_ * pad + (has_heading_ ? pad : 0);
+    // write the divider line
+    char *p = divider_text_;
+    p = strcontcpy(p, divider_style_type::enabler_str().data());
+    *p++ = divider_cross;
+    for (size_t i = 0; i < total_pad; ++i) {
+      *p++ = divider_horizontal;
     }
+    *p++ = divider_cross;
+    p = strcontcpy(p, divider_style_type::disabler_str().data());
+    *p = '\0';
 
-    // single-use iterator
+    // prepare prefix and suffix for title row
+    troll::pad(title_text_, sizeof title_text_, "", 0, padding::left);
+    p = title_text_;
+    p = strcontcpy(p, divider_style_type::enabler_str().data());
+    *p++ = divider_vertical;
+    p = strcontcpy(p, divider_style_type::disabler_str().data());
+    p = strcontcpy(p, title_row_args_.style.enabler_str().data());
+    if (has_heading_) {
+      troll::pad(p, pad, title_heading.data(), title_heading.size(), padding::middle);
+      p += pad;
+    }
+    title_begin_ = p;
+    p += elems_per_row_ * pad;
+    p = strcontcpy(p, title_row_args_.style.disabler_str().data());
+    p = strcontcpy(p, divider_style_type::enabler_str().data());
+    *p++ = divider_vertical;
+    p = strcontcpy(p, divider_style_type::disabler_str().data());
+    *p = '\0';
+
+    // prepare prefix and suffix for element rows
+    prepare_elem_row_(std::make_index_sequence<num_elem_row_args>{});
+  }
+
+private:
+  template<size_type ...I>
+  void prepare_elem_row_(std::index_sequence<I...>) {
+    (prepare_elem_row_<I>(), ...);
+  }
+
+  template<size_type I>
+  void prepare_elem_row_() {
+    auto &args = std::get<I>(elem_row_args_);
+    char *p = std::get<I>(elem_texts_);
+    troll::pad(p, sizeof std::get<I>(elem_texts_), "", 0, padding::left);
+    p = strcontcpy(p, divider_style_type::enabler_str().data());
+    *p++ = divider_vertical;
+    p = strcontcpy(p, divider_style_type::disabler_str().data());
+    p = strcontcpy(p, args.style.enabler_str().data());
+    if (has_heading_) {
+      auto heading = sformat<pad>("{}", args.heading);
+      troll::pad(p, pad, heading.data(), heading.size(), padding::middle);
+      p += pad;
+    }
+    elem_begins_[I] = p;
+    p += elems_per_row_ * pad;
+    p = strcontcpy(p, args.style.disabler_str().data());
+    p = strcontcpy(p, divider_style_type::enabler_str().data());
+    *p++ = divider_vertical;
+    p = strcontcpy(p, divider_style_type::disabler_str().data());
+    *p = '\0';
+  }
+
+  public:
+    // single use iterator
     class iterator {
     public:
       using difference_type = size_t;  // never
@@ -281,23 +374,39 @@ namespace troll {
       using reference = const value_type &;
       using iterator_category = std::input_iterator_tag;
 
-      constexpr bool operator==(const iterator &other) const {
-        return that_ == other.that_;
+      constexpr bool operator==(const iterator &rhs) const {
+        return that_ == rhs.that_;
       }
 
-      constexpr bool operator!=(const iterator &other) const {
-          return !(*this == other);
+      constexpr bool operator!=(const iterator &rhs) const {
+          return !(*this == rhs);
       }
 
+    private:
+      // helper functions used to retrieve tuple elements dynamically
+      template<size_type I = 0>
+      [[noreturn]] constexpr std::enable_if_t<I == num_elem_row_args, value_type> get_elem_text_(size_type) const {
+        __builtin_unreachable();
+      }
+
+      template<size_type I = 0>
+      constexpr std::enable_if_t<I < num_elem_row_args, value_type> get_elem_text_(size_type idx) const {
+        if (idx == 0) {
+          return std::get<I>(that_->elem_texts_);
+        }
+        return get_elem_text_<I + 1>(idx - 1);
+      }
+
+    public:
       constexpr value_type operator*() const {
         switch (that_->state_) {
           case state::top_line:
           case state::middle_line:
-            return that_->bar_text_;
+            return that_->divider_text_;
           case state::title_line:
             return that_->title_text_;
           case state::elem_line:
-            return that_->elem_text_;
+            return get_elem_text_(that_->state_which_elem_);
           default:
             __builtin_unreachable();
         }
@@ -306,14 +415,15 @@ namespace troll {
       constexpr iterator &operator++() {
         if (that_->state_ == state::top_line) {
           char buf[pad + 1];
-          troll::pad(that_->title_text_, sizeof that_->title_text_, "", 0, padding::left);
-          that_->title_text_[0] = '|';
-          // get titles
+          // write down the titles
           size_type titles = 0;
-          for (; that_->t_begin_ != that_->t_end_ && titles < that_->elems_row_; ++that_->t_begin_, ++titles) {
-            auto sz = snformat(buf, pad + 1, "{}", *that_->t_begin_);
-            troll::pad(that_->title_text_ + titles * that_->pad + 1, that_->pad, buf, sz, padding::middle);
+          auto &ta = that_->title_row_args_;
+          for (; ta.begin != ta.end && titles < that_->elems_per_row_; ++ta.begin, ++titles) {
+            auto sz = snformat(buf, pad + 1, "{}", *ta.begin);
+            troll::pad(that_->title_begin_ + titles * that_->pad, that_->pad, buf, sz, padding::middle);
           }
+          // in case row is not full
+          troll::pad(that_->title_begin_ + titles * that_->pad, that_->elems_per_row_ * that_->pad - titles * that_->pad, "", 0, padding::left);
 
           if (titles == 0) {
             // no more
@@ -321,52 +431,74 @@ namespace troll {
             return *this;
           }
 
-          that_->title_text_[that_->elems_row_ * that_->pad + 1] = '|';
-          that_->title_text_[that_->elems_row_ * that_->pad + 2] = '\0';
-
-          troll::pad(that_->elem_text_, sizeof that_->elem_text_, "", 0, padding::left);
-          that_->elem_text_[0] = '|';
-          // get elements
-          size_type elems = 0;
-          for (; elems < titles; ++that_->e_begin_, ++elems) {
-            auto sz = snformat(buf, pad + 1, "{}", *that_->e_begin_);
-            troll::pad(that_->elem_text_ + elems * that_->pad + 1, that_->pad, buf, sz, padding::middle);
-          }
-
-          that_->elem_text_[that_->elems_row_ * that_->pad + 1] = '|';
-          that_->elem_text_[that_->elems_row_ * that_->pad + 2] = '\0';
+          // write down the elements
+          do_elem_row_(std::make_index_sequence<num_elem_row_args>{}, titles);
         }
-
         // advance state
-        that_->state_ = static_cast<state>((static_cast<char>(that_->state_) + 1) % (static_cast<char>(state::end)));
+        switch (that_->state_) {
+          case state::top_line: that_->state_ = state::title_line; break;
+          case state::title_line: that_->state_ = state::middle_line; break;
+          case state::middle_line: that_->state_ = state::elem_line; break;
+          case state::elem_line:
+            if (that_->state_which_elem_ == num_elem_row_args - 1) {
+              that_->state_which_elem_ = 0;
+              that_->state_ = state::top_line;
+            } else {
+              ++that_->state_which_elem_;
+              that_->state_ = state::middle_line;
+            }
+          default: break;
+        }
         return *this;
       }
 
     private:
-      friend class tabulate_1d;
+      template<size_type ...I>
+      void do_elem_row_(std::index_sequence<I...>, size_type titles) {
+        (do_elem_row_<I>(titles), ...);
+      }
 
-      constexpr iterator(tabulate_1d *that)
-        : that_{that} {}
+      template<size_type I>
+      void do_elem_row_(size_type titles) {
+        char buf[pad + 1];
+        auto &args = std::get<I>(that_->elem_row_args_);
+        char *p = that_->elem_begins_[I];
+        for (size_type elems = 0; elems < titles; ++args.begin, ++elems) {
+          auto sz = snformat(buf, pad + 1, "{}", *args.begin);
+          troll::pad(p + elems * that_->pad, that_->pad, buf, sz, padding::middle);
+        }
+        // in case row is not full
+        troll::pad(p + titles * that_->pad, that_->elems_per_row_ * that_->pad - titles * that_->pad, "", 0, padding::left);
+      }
 
-      iterator(iterator &) = delete;
-      iterator &operator=(iterator &) = delete;
-
-      tabulate_1d *that_;
+      friend class tabulate;
+      iterator(tabulate *tab) : that_{tab} {}
+      iterator(const iterator &) = delete;
+      iterator &operator=(const iterator &) = delete;
+      tabulate *that_;
     };
 
-    constexpr iterator begin() {
-      return iterator{this};
-    }
+  constexpr iterator begin() {
+    return iterator{this};
+  }
 
-    constexpr iterator end() {
-      return iterator{nullptr};
-    }
+  constexpr iterator end() {
+    return iterator{nullptr};
+  }
 
   private:
-    TitleIt t_begin_, t_end_;
-    ElemsIt e_begin_;
-    size_type elems_row_;
-    char title_text_[max_line_width], elem_text_[max_line_width], bar_text_[max_line_width];
+    friend class iterator;
+
+    bool has_heading_ = false;
+    size_type elems_per_row_;
+    title_row_args_type title_row_args_;
+    elem_row_args_type elem_row_args_;
+    static constexpr auto divider_wrapper_size_ = divider_style_type::wrapper_str_size;
+    char divider_text_[max_line_width + divider_wrapper_size_];
+    char title_text_[max_line_width + title_row_args_type::style_type::wrapper_str_size + divider_wrapper_size_ * 2];
+    char *title_begin_ = 0;
+    std::tuple<char[max_line_width + ElemRowArgs::style_type::wrapper_str_size + divider_wrapper_size_ * 2]...> elem_texts_;
+    char *elem_begins_[num_elem_row_args];
 
     enum class state : char {
       top_line = 0,
@@ -375,13 +507,17 @@ namespace troll {
       elem_line,
       end,
     } state_ = state::top_line;
-
-    friend class iterator;
+    size_type state_which_elem_ = 0;
   };
 
-  template<size_t MaxLineWidth, size_t Pad, class TitleIt, class ElemsIt>
-  auto make_tabulate_1d(TitleIt t_begin, TitleIt t_end, ElemsIt e_begin, size_t elems_row) {
-    return tabulate_1d<MaxLineWidth, Pad, TitleIt, ElemsIt>{t_begin, t_end, e_begin, elems_row};
+  /**
+   * make a tabulator. refer to tests for usage.
+   */
+  template<size_t MaxLineWidth, size_t Pad, class DividerStyle, class TitleRowArgs, class ...ElemRowArgs>
+  constexpr auto make_tabulate(size_t elems_per_row, DividerStyle, TitleRowArgs &&title, ElemRowArgs &&...elems) {
+    return tabulate<MaxLineWidth, Pad, DividerStyle, TitleRowArgs, ElemRowArgs...>{
+      elems_per_row, std::forward<TitleRowArgs>(title), std::forward<ElemRowArgs>(elems)...
+    };
   }
 
   /**

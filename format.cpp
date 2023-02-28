@@ -35,6 +35,11 @@ namespace {
 
 namespace troll {
 
+  char *strcontcpy(char *dest, const char *src) noexcept {
+    while (*src) *dest++ = *src++;
+    return dest;
+  }
+
   void pad(char *__restrict__ dest, size_t dest_pad_len, const char *__restrict__ src, size_t srclen, padding p, char padchar) {
     if (dest_pad_len < srclen) {
       srclen = dest_pad_len;

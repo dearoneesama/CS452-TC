@@ -108,12 +108,26 @@ TEST_CASE("static_ansi_style_options usage", "[static_ansi_style_options]") {
   }
 }
 
-TEST_CASE("tabulate 1d usage", "[tabulate1d]") {
+TEST_CASE("tabulate usage", "[tabulate]") {
+  static const auto compare = [](auto &tab, auto expected) {
+    etl::string<1000> act;
+    for (etl::string_view sv : tab) {
+      act += sv.data();
+      act += "\n";
+    }
+    REQUIRE(act == expected);
+  };
+
   SECTION("truncate only element") {
     const char *titles[] = {"TooLongTitle"};
                             // ^ 7 + 5
     int data[] = {123};
-    auto tab = troll::make_tabulate_1d<50, 7>(titles, titles + 1, data, 4);
+    auto tab = troll::make_tabulate<50, 7>(
+      4,
+      troll::static_ansi_style_options<>{},
+      troll::tabulate_title_row_args{"", titles, titles + 1, troll::static_ansi_style_options<>{}},
+      troll::tabulate_elem_row_args{"", data, troll::static_ansi_style_options<>{}}
+    );
     const char expected[] =
 R"(+----------------------------+
 |TooLong                     |
@@ -121,18 +135,18 @@ R"(+----------------------------+
 |  123                       |
 +----------------------------+
 )";
-    etl::string<sizeof expected + 10> act;
-    for (etl::string_view sv : tab) {
-      act += sv.data();
-      act += "\n";
-    }
-    REQUIRE(act == expected);
+    compare(tab, expected);
   }
 
-  SECTION("normal usage") {
+  SECTION("normal usage with one field and no style") {
     const char *titles[] = {"tita1", "tita2", "titb3", "titc4", "titx5", "titw6", "tita7", "titu8", "titz9", "titz10"};
     int data[] = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10};
-    auto tab = troll::make_tabulate_1d<50, 7>(titles, titles + 10, data, 4);
+    auto tab = troll::make_tabulate<50, 7>(
+      4,
+      troll::static_ansi_style_options<>{},
+      troll::tabulate_title_row_args{"", titles, titles + 10, troll::static_ansi_style_options<>{}},
+      troll::tabulate_elem_row_args{"", data, troll::static_ansi_style_options<>{}}
+    );
     const char expected[] =
 R"(+----------------------------+
 | tita1  tita2  titb3  titc4 |
@@ -148,12 +162,32 @@ R"(+----------------------------+
 |   9     10                 |
 +----------------------------+
 )";
-    etl::string<sizeof expected + 10> act;
-    for (etl::string_view sv : tab) {
-      act += sv.data();
-      act += "\n";
-    }
-    REQUIRE(act == expected);
+    compare(tab, expected);
+  }
+
+  SECTION("multiple fields and styles") {
+    const char *titles[] = {"tita1", "tita2", "titb3", "titc4", "titx5", "titw6", "tita7", "titu8"};
+    int data[] = {1, 2, 3, 4, 57, 6, 7, 8};
+    int data2[] = {1, 2, 3, 44, 5, 6, 7, 8};
+    auto tab = troll::make_tabulate<120, 10>(
+      8,
+      troll::static_ansi_style_options<troll::ansi_font::none, troll::ansi_color::blue>{},
+      troll::tabulate_title_row_args{"heading1", titles, titles + 8, troll::static_ansi_style_options<troll::ansi_font::bold>{}},
+      troll::tabulate_elem_row_args{"elem1", data, troll::static_ansi_style_options<>{}},
+      troll::tabulate_elem_row_args{"elem2", data2, troll::static_ansi_style_options<troll::ansi_font::none, troll::ansi_color::red>{}},
+      troll::tabulate_elem_row_args{"elem1", titles, troll::static_ansi_style_options<>{}}
+    );
+    const char expected[] =
+      "\033[34m+------------------------------------------------------------------------------------------+\033[0m\n"
+      "\033[34m|\033[0m\033[1m heading1   tita1     tita2     titb3     titc4     titx5     titw6     tita7     titu8   \033[0m\033[34m|\033[0m\n"
+      "\033[34m+------------------------------------------------------------------------------------------+\033[0m\n"
+      "\033[34m|\033[0m  elem1       1         2         3         4         57        6         7         8     \033[34m|\033[0m\n"
+      "\033[34m+------------------------------------------------------------------------------------------+\033[0m\n"
+      "\033[34m|\033[0m\033[31m  elem2       1         2         3         44        5         6         7         8     \033[0m\033[34m|\033[0m\n"
+      "\033[34m+------------------------------------------------------------------------------------------+\033[0m\n"
+      "\033[34m|\033[0m  elem1     tita1     tita2     titb3     titc4     titx5     titw6     tita7     titu8   \033[34m|\033[0m\n"
+      "\033[34m+------------------------------------------------------------------------------------------+\033[0m\n";
+    compare(tab, expected);
   }
 }
 
