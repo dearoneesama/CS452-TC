@@ -292,77 +292,77 @@ namespace troll {
     char divider_vertical = '|';
     char divider_cross = '+';
 
-  template<class Tit, class ...Elems>
-  constexpr tabulate(size_type elems_per_row, Tit &&title, Elems &&...elems)
-    : elems_per_row_{elems_per_row}
-    , title_row_args_{std::forward<Tit>(title)}
-    , elem_row_args_{std::forward<Elems>(elems)...}
-  {
-    auto title_heading = sformat<pad>("{}", title_row_args_.heading);
-    has_heading_ = title_heading.size();
-    auto total_pad = elems_per_row_ * pad + (has_heading_ ? pad : 0);
-    // write the divider line
-    char *p = divider_text_;
-    p = strcontcpy(p, divider_style_type::enabler_str().data());
-    *p++ = divider_cross;
-    for (size_t i = 0; i < total_pad; ++i) {
-      *p++ = divider_horizontal;
+    template<class Tit, class ...Elems>
+    constexpr tabulate(size_type elems_per_row, Tit &&title, Elems &&...elems)
+      : elems_per_row_{elems_per_row}
+      , title_row_args_{std::forward<Tit>(title)}
+      , elem_row_args_{std::forward<Elems>(elems)...}
+    {
+      auto title_heading = sformat<pad>("{}", title_row_args_.heading);
+      has_heading_ = title_heading.size();
+      auto total_pad = elems_per_row_ * pad + (has_heading_ ? pad : 0);
+      // write the divider line
+      char *p = divider_text_;
+      p = strcontcpy(p, divider_style_type::enabler_str().data());
+      *p++ = divider_cross;
+      for (size_t i = 0; i < total_pad; ++i) {
+        *p++ = divider_horizontal;
+      }
+      *p++ = divider_cross;
+      p = strcontcpy(p, divider_style_type::disabler_str().data());
+      *p = '\0';
+
+      // prepare prefix and suffix for title row
+      troll::pad(title_text_, sizeof title_text_, "", 0, padding::left);
+      p = title_text_;
+      p = strcontcpy(p, divider_style_type::enabler_str().data());
+      *p++ = divider_vertical;
+      p = strcontcpy(p, divider_style_type::disabler_str().data());
+      p = strcontcpy(p, title_row_args_.style.enabler_str().data());
+      if (has_heading_) {
+        troll::pad(p, pad, title_heading.data(), title_heading.size(), padding::middle);
+        p += pad;
+      }
+      title_begin_ = p;
+      p += elems_per_row_ * pad;
+      p = strcontcpy(p, title_row_args_.style.disabler_str().data());
+      p = strcontcpy(p, divider_style_type::enabler_str().data());
+      *p++ = divider_vertical;
+      p = strcontcpy(p, divider_style_type::disabler_str().data());
+      *p = '\0';
+
+      // prepare prefix and suffix for element rows
+      prepare_elem_row_(std::make_index_sequence<num_elem_row_args>{});
     }
-    *p++ = divider_cross;
-    p = strcontcpy(p, divider_style_type::disabler_str().data());
-    *p = '\0';
 
-    // prepare prefix and suffix for title row
-    troll::pad(title_text_, sizeof title_text_, "", 0, padding::left);
-    p = title_text_;
-    p = strcontcpy(p, divider_style_type::enabler_str().data());
-    *p++ = divider_vertical;
-    p = strcontcpy(p, divider_style_type::disabler_str().data());
-    p = strcontcpy(p, title_row_args_.style.enabler_str().data());
-    if (has_heading_) {
-      troll::pad(p, pad, title_heading.data(), title_heading.size(), padding::middle);
-      p += pad;
+  private:
+    template<size_type ...I>
+    void prepare_elem_row_(std::index_sequence<I...>) {
+      (prepare_elem_row_<I>(), ...);
     }
-    title_begin_ = p;
-    p += elems_per_row_ * pad;
-    p = strcontcpy(p, title_row_args_.style.disabler_str().data());
-    p = strcontcpy(p, divider_style_type::enabler_str().data());
-    *p++ = divider_vertical;
-    p = strcontcpy(p, divider_style_type::disabler_str().data());
-    *p = '\0';
 
-    // prepare prefix and suffix for element rows
-    prepare_elem_row_(std::make_index_sequence<num_elem_row_args>{});
-  }
-
-private:
-  template<size_type ...I>
-  void prepare_elem_row_(std::index_sequence<I...>) {
-    (prepare_elem_row_<I>(), ...);
-  }
-
-  template<size_type I>
-  void prepare_elem_row_() {
-    auto &args = std::get<I>(elem_row_args_);
-    char *p = std::get<I>(elem_texts_);
-    troll::pad(p, sizeof std::get<I>(elem_texts_), "", 0, padding::left);
-    p = strcontcpy(p, divider_style_type::enabler_str().data());
-    *p++ = divider_vertical;
-    p = strcontcpy(p, divider_style_type::disabler_str().data());
-    p = strcontcpy(p, args.style.enabler_str().data());
-    if (has_heading_) {
-      auto heading = sformat<pad>("{}", args.heading);
-      troll::pad(p, pad, heading.data(), heading.size(), padding::middle);
-      p += pad;
+    template<size_type I>
+    void prepare_elem_row_() {
+      auto &args = std::get<I>(elem_row_args_);
+      char *p = std::get<I>(elem_texts_);
+      troll::pad(p, sizeof std::get<I>(elem_texts_), "", 0, padding::left);
+      p = strcontcpy(p, divider_style_type::enabler_str().data());
+      *p++ = divider_vertical;
+      p = strcontcpy(p, divider_style_type::disabler_str().data());
+      p = strcontcpy(p, args.style.enabler_str().data());
+      if (has_heading_) {
+        auto heading = sformat<pad>("{}", args.heading);
+        troll::pad(p, pad, heading.data(), heading.size(), padding::middle);
+        p += pad;
+      }
+      elem_begins_[I] = p;
+      p += elems_per_row_ * pad;
+      p = strcontcpy(p, args.style.disabler_str().data());
+      p = strcontcpy(p, divider_style_type::enabler_str().data());
+      *p++ = divider_vertical;
+      p = strcontcpy(p, divider_style_type::disabler_str().data());
+      *p = '\0';
     }
-    elem_begins_[I] = p;
-    p += elems_per_row_ * pad;
-    p = strcontcpy(p, args.style.disabler_str().data());
-    p = strcontcpy(p, divider_style_type::enabler_str().data());
-    *p++ = divider_vertical;
-    p = strcontcpy(p, divider_style_type::disabler_str().data());
-    *p = '\0';
-  }
 
   public:
     // single use iterator
@@ -479,28 +479,28 @@ private:
       tabulate *that_;
     };
 
-  constexpr iterator begin() {
-    return iterator{this};
-  }
+    constexpr iterator begin() {
+      return iterator{this};
+    }
 
-  constexpr iterator end() {
-    return iterator{nullptr};
-  }
+    constexpr iterator end() {
+      return iterator{nullptr};
+    }
 
-  /**
-   * reset the iterators so this object can be used again.
-   */
-  constexpr void reset_src_iterator(
-    typename title_row_args_type::title_it_type title_begin,
-    typename title_row_args_type::title_it_type title_end,
-    typename ElemRowArgs::elem_it_type ...elem_begins)
-  {
-    title_row_args_.begin = title_begin;
-    title_row_args_.end = title_end;
-    reset_elem_begins_(std::make_index_sequence<num_elem_row_args>{}, elem_begins...);
-    state_ = state::top_line;
-    state_which_elem_ = 0;
-  }
+    /**
+     * reset the iterators so this object can be used again.
+     */
+    constexpr void reset_src_iterator(
+      typename title_row_args_type::title_it_type title_begin,
+      typename title_row_args_type::title_it_type title_end,
+      typename ElemRowArgs::elem_it_type ...elem_begins)
+    {
+      title_row_args_.begin = title_begin;
+      title_row_args_.end = title_end;
+      reset_elem_begins_(std::make_index_sequence<num_elem_row_args>{}, elem_begins...);
+      state_ = state::top_line;
+      state_which_elem_ = 0;
+    }
 
   private:
     template<size_type ...I>
