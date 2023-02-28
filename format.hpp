@@ -437,7 +437,9 @@ private:
         // advance state
         switch (that_->state_) {
           case state::top_line: that_->state_ = state::title_line; break;
-          case state::title_line: that_->state_ = state::middle_line; break;
+          case state::title_line:
+            that_->state_ = num_elem_row_args ? state::middle_line : state::top_line;
+            break;
           case state::middle_line: that_->state_ = state::elem_line; break;
           case state::elem_line:
             if (that_->state_which_elem_ == num_elem_row_args - 1) {
@@ -455,6 +457,7 @@ private:
     private:
       template<size_type ...I>
       void do_elem_row_(std::index_sequence<I...>, size_type titles) {
+        (void)titles;  // suppress unused warning if there is no element rows
         (do_elem_row_<I>(titles), ...);
       }
 
@@ -516,7 +519,7 @@ private:
     char title_text_[max_line_width + title_row_args_type::style_type::wrapper_str_size + divider_wrapper_size_ * 2];
     char *title_begin_ = 0;
     std::tuple<char[max_line_width + ElemRowArgs::style_type::wrapper_str_size + divider_wrapper_size_ * 2]...> elem_texts_;
-    char *elem_begins_[num_elem_row_args];
+    char *elem_begins_[num_elem_row_args ? num_elem_row_args : 1];
 
     enum class state : char {
       top_line = 0,

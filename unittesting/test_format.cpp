@@ -239,6 +239,23 @@ R"(+---------------------+
 )";
     compare(tab, expected2);
   }
+
+  SECTION("only title row") {
+    const char *titles[] = {"tita1", "tita2", "titb3", "titc4", "titx5", "titw6", "tita7", "titu8"};
+    auto tab = troll::make_tabulate<120, 10>(
+      8,
+      troll::static_ansi_style_options<>{},
+      troll::tabulate_title_row_args{"heading1", titles, titles + 8, troll::static_ansi_style_options<>{}}
+    );
+
+    const char *expected =
+R"(+------------------------------------------------------------------------------------------+
+| heading1   tita1     tita2     titb3     titc4     titx5     titw6     tita7     titu8   |
++------------------------------------------------------------------------------------------+
+)";
+
+    compare(tab, expected);
+  }
 }
 
 TEST_CASE("output control usage", "[OutputControl]") {
