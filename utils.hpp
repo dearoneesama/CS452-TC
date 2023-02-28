@@ -61,6 +61,11 @@ namespace troll {
       return iterator(nullptr);
     }
 
+    constexpr void reset_src_iterator(InputIt begin, InputIt end) noexcept {
+      begin_ = begin;
+      end_ = end;
+    }
+
   private:
     friend class iterator;
     InputIt begin_, end_;

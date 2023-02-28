@@ -484,7 +484,27 @@ private:
     return iterator{nullptr};
   }
 
+  /**
+   * reset the iterators so this object can be used again.
+   */
+  constexpr void reset_src_iterator(
+    typename title_row_args_type::title_it_type title_begin,
+    typename title_row_args_type::title_it_type title_end,
+    typename ElemRowArgs::elem_it_type ...elem_begins)
+  {
+    title_row_args_.begin = title_begin;
+    title_row_args_.end = title_end;
+    reset_elem_begins_(std::make_index_sequence<num_elem_row_args>{}, elem_begins...);
+    state_ = state::top_line;
+    state_which_elem_ = 0;
+  }
+
   private:
+    template<size_type ...I>
+    constexpr void reset_elem_begins_(std::index_sequence<I...>, typename ElemRowArgs::elem_it_type ...elem_begins) {
+      ((void)(std::get<I>(elem_row_args_).begin = elem_begins), ...);
+    }
+
     friend class iterator;
 
     bool has_heading_ = false;

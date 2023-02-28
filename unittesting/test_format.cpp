@@ -216,6 +216,28 @@ R"(+---------------------+
 +---------------------+
 )";
     compare(tab, expected);
+
+    // reset it
+    data[0].a = 10;
+    data[0].b = 11;
+    data[0].c = 12;
+    data[1].a = 13;
+    data[1].b = 14;
+    get_a.reset_src_iterator(data, data + 2);
+    get_b.reset_src_iterator(data, data + 2);
+    get_c.reset_src_iterator(data, data + 2);
+    tab.reset_src_iterator(get_a.begin(), get_a.end(), get_b.begin(), get_c.begin());
+
+    const char expected2[] =
+R"(+---------------------+
+|  10     13      7   |
++---------------------+
+|  11     14      8   |
++---------------------+
+|  12      6      9   |
++---------------------+
+)";
+    compare(tab, expected2);
   }
 }
 
