@@ -30,7 +30,7 @@ struct time_distribution_t {
 
 static constexpr size_t NUM_PRIORITIES = PRIORITY_UNDEFINED;
 
-static constexpr size_t TASK_STACK_SIZE/*_BYTES*/ = 1024 * 5;
+static constexpr size_t TASK_STACK_SIZE/*_BYTES*/ = 1024 * 1024;
 static constexpr size_t MAX_NUM_TASKS = 50;
 
 static constexpr size_t SP_ALIGNMENT = 16;

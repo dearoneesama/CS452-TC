@@ -64,7 +64,7 @@ el1_entry:
     msr DAIFSet, #0b1111
     // initialize SP
     msr SPSel, #1
-    ldr     x0, =stackend
+    ldr     x0, =__stack_top
     mov     sp, x0
 
     // Clean the BSS section
@@ -96,11 +96,3 @@ bss_loop_end:
 exit:
     wfi
     b    exit
-
-.section ".bss"
-.balign 16
-stack:
-    .rept 0x10000
-    .byte 0
-    .endr
-stackend:
