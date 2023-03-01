@@ -5,6 +5,7 @@
 #include "format.hpp"
 #include "servers.hpp"
 #include "notifiers.hpp"
+#include "format_scan.hpp"
 
 namespace k1 {
 
@@ -429,6 +430,11 @@ struct idle_message_t {
   time_percentage_t percentages;
 };
 
+struct user_input_message_t {
+  char n;
+  char input;
+};
+
 void display_controller() {
   RegisterAs("displayc");
   tid_t uart_server = WhoIs("txuarts0");
@@ -451,10 +457,54 @@ void display_controller() {
           Putc(uart_server, 0, buffer[i]);
         }
         Reply(request_tid, "o", 1);
+        break;
+      }
+      case 'u': { // user input
+        user_input_message_t* user_input_msg = (user_input_message_t*) message;
+        Putc(uart_server, 0, user_input_msg->input);
+        Reply(request_tid, "o", 1);
+        break;
+      }
+      case 's': { // string
+        for (size_t i = 1; i < request; ++i) {
+          Putc(uart_server, 0, message[i]);
+        }
+        Reply(request_tid, "o", 1);
       }
       default: {
         break;
       }
+    }
+  }
+}
+
+void command_controller() {
+  tid_t uart_server = WhoIs("rxuarts0");
+  tid_t display_ctrl = WhoIs("displayc");
+  char command_buffer[1 + 64];
+  command_buffer[0] = 's';
+  size_t curr_size = 1;
+  user_input_message_t input_msg = { 'u', 0 };
+  char reply;
+
+  const char *history = "s\033[49;1H\033[K> ";
+  const char *clear_line = "s\033[50;1H\033[K> ";
+  Send(display_ctrl, clear_line, 13, &reply, 1);
+
+  while (1) {
+    char c = Getc(uart_server, 0);
+    if (c == '\r') {
+      Send(display_ctrl, history, 13, &reply, 1);
+      Send(display_ctrl, command_buffer, curr_size, &reply, 1);
+      int train, speed;
+      troll::sscan(command_buffer, "tr {} {}", train, speed);
+      Send(display_ctrl, clear_line, 13, &reply, 1);
+      curr_size = 1;
+      // Send(train_controller, cmd);
+    } else if (curr_size < 65) {
+      command_buffer[curr_size++] = c;
+      input_msg.input = c;
+      Send(display_ctrl, (char*)&input_msg, sizeof(user_input_message_t), &reply, 1);
     }
   }
 }
@@ -500,6 +550,7 @@ void first_user_task() {
   Create(PRIORITY_L1, [] { rx_uartserver(0); });
 
   Create(PRIORITY_L1, display_controller);
+  Create(PRIORITY_L1, command_controller);
   Create(PRIORITY_IDLE, idle_task);
 }
 

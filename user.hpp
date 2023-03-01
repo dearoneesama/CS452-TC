@@ -19,3 +19,7 @@ namespace k2 {
 namespace k3 {
   void first_user_task();
 }
+
+namespace k4 {
+  void first_user_task();
+}

@@ -2,6 +2,7 @@
 
 #include "containers.hpp"
 #include "kstddefs.hpp"
+#include "gpio.hpp"
 
 namespace kernel {
   enum class task_state_t : int {
@@ -58,7 +59,7 @@ namespace kernel {
     void k_send(task_descriptor *curr_task);
     void k_receive(task_descriptor *curr_task);
     void k_reply(task_descriptor *curr_task);
-    void k_await_event(task_descriptor *curr_task);
+    void k_await_event(task_descriptor *curr_task, gpio::uart_interrupt_state& state);
     void k_exit(task_descriptor *curr_task);
 
     void wake_up_tasks_on_event(events_t event_id, int return_value);

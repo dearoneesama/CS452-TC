@@ -249,7 +249,7 @@ void tx_uartserver(char uart_channel) {
     RegisterAs("txuarts1");
   }
 
-  tid_t notifier = Create(priority_t::PRIORITY_L5, tx_uartnotifier);
+  tid_t notifier = Create(priority_t::PRIORITY_L1, tx_uartnotifier);
   tid_t request_tid;
   char msg;
   Receive((int*)&request_tid, &msg, 1);
@@ -279,6 +279,10 @@ void tx_uartserver(char uart_channel) {
           char_queue.pop();
           uart_write(0, uart_channel, c);
           Reply(requester, reply, 1);
+        }
+
+        if (!requester_queue.empty()) {
+          Reply(notifier, reply, 1);
         }
         break;
       }
@@ -316,7 +320,7 @@ void rx_uartserver(char uart_channel) {
     RegisterAs("rxuarts1");
   }
 
-  tid_t notifier = Create(priority_t::PRIORITY_L5, rx_uartnotifier);
+  tid_t notifier = Create(priority_t::PRIORITY_L1, rx_uartnotifier);
   tid_t request_tid;
   char msg;
   Receive((int*)&request_tid, &msg, 1);
@@ -344,6 +348,9 @@ void rx_uartserver(char uart_channel) {
             requester_queue.pop();
             Reply(requester, &c, 1);
           }
+        }
+        if (!requester_queue.empty()) {
+          Reply(notifier, reply, 1);
         }
         break;
       case 'g': {

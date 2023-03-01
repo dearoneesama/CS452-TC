@@ -88,7 +88,6 @@ void rx_uartnotifier() {
     if (is_uart_readable(0, uart_channel)) {
       Send(server_tid, &notify_message, 1, &reply, 1);
     }
-
     // this should enable interrupt
     value = AwaitEvent(event);
     if (value != 1) {

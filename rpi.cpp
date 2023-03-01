@@ -111,7 +111,7 @@ void init_gpio() {
   setup_gpio(21, GPIO_ALTFN4, GPIO_NONE);
 
   setup_gpio(24, GPIO_INPUT, GPIO_NONE);
-  gpio->GPLEN0 = (1 << 24);
+  gpio->GPLEN0 |= (1 << 24);
 }
 
 static const uint32_t SPI_CNTL0_DOUT_HOLD_SHIFT = 12;

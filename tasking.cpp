@@ -188,10 +188,30 @@ void task_manager::k_reply(task_descriptor *curr_task) {
   ready_push(curr_task);
 }
 
-void task_manager::k_await_event(task_descriptor *curr_task) {
-  size_t event_id = curr_task->context.registers[0];
+void task_manager::k_await_event(task_descriptor *curr_task, gpio::uart_interrupt_state& state) {
+  events_t event_id = (events_t) (curr_task->context.registers[0]);
   if (event_id < MAX_NUM_EVENTS) {
     event_queues[event_id].push(*curr_task);
+    switch (event_id) {
+      case events_t::UART_R0: {
+        state.enable_rx(0);
+        break;
+      }
+      case events_t::UART_T0: {
+        state.enable_tx(0);
+        break;
+      }
+      case events_t::UART_R1: {
+        state.enable_rx(1);
+        break;
+      }
+      case events_t::UART_T1: {
+        state.enable_tx(1);
+        break;
+      }
+      default:
+        break;
+    }
   } else {
     curr_task->context.registers[0] = -1;
     ready_push(curr_task);

@@ -41,7 +41,7 @@ int main() {
 
   // spawn first task
   auto *current_task = task_manager.new_task(KERNEL_TID, 1, PRIORITY_L2);
-  current_task->context.registers[0] = reinterpret_cast<int64_t>(k3::first_user_task);
+  current_task->context.registers[0] = reinterpret_cast<int64_t>(k4::first_user_task);
   current_task->context.exception_lr = reinterpret_cast<uint64_t>(task_wrapper);
   task_manager.ready_push(current_task);
 
@@ -99,7 +99,7 @@ int main() {
         break;
       }
       case SYSCALLN_AWAITEVENT: {
-        task_manager.k_await_event(current_task);
+        task_manager.k_await_event(current_task, uart_irq_state);
         break;
       }
       case SYSCALLN_EXIT: {
