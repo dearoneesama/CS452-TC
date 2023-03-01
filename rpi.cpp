@@ -65,6 +65,14 @@ static volatile struct GPIO* const gpio  =  (struct GPIO*)(GPIO_BASE);
 static volatile struct AUX*  const aux   =   (struct AUX*)(AUX_BASE);
 static volatile struct SPI*  const spi[] = { (struct SPI*)(AUX_BASE + 0x80), (struct SPI*)(AUX_BASE + 0xC0) };
 
+uint32_t read_gpeds() {
+  return gpio->GPEDS0;
+}
+
+void set_gpeds(uint32_t gpeds) {
+  gpio->GPEDS0 = gpeds;
+}
+
 /*************** GPIO ***************/
 
 static const uint32_t GPIO_INPUT  = 0x00;
@@ -101,6 +109,9 @@ void init_gpio() {
   setup_gpio(19, GPIO_ALTFN4, GPIO_NONE);
   setup_gpio(20, GPIO_ALTFN4, GPIO_NONE);
   setup_gpio(21, GPIO_ALTFN4, GPIO_NONE);
+
+  setup_gpio(24, GPIO_INPUT, GPIO_NONE);
+  gpio->GPLEN0 = (1 << 24);
 }
 
 static const uint32_t SPI_CNTL0_DOUT_HOLD_SHIFT = 12;
@@ -184,30 +195,7 @@ static void spi_send_recv(uint32_t channel, const char* sendbuf, size_t sendlen,
 
 /*************** SPI ***************/
 
-static const char UART_RHR       = 0x00; // R
-static const char UART_THR       = 0x00; // W
-static const char UART_IER       = 0x01; // R/W
-static const char UART_IIR       = 0x02; // R
-static const char UART_FCR       = 0x02; // W
-static const char UART_LCR       = 0x03; // R/W
-static const char UART_MCR       = 0x04; // R/W
-static const char UART_LSR       = 0x05; // R
-static const char UART_MSR       = 0x06; // R
-static const char UART_SPR       = 0x07; // R/W
-static const char UART_TXLVL     = 0x08; // R
-static const char UART_RXLVL     = 0x09; // R
-static const char UART_IODir     = 0x0A; // R/W
-static const char UART_IOState   = 0x0B; // R/W
-static const char UART_IOIntEna  = 0x0C; // R/W
-static const char UART_reserved  = 0x0D;
-static const char UART_IOControl = 0x0E; // R/W
-static const char UART_EFCR      = 0x0F; // R/W
-
-static const char UART_DLL       = 0x00; // R/W - only accessible when EFR[4] = 1 and MCR[2] = 1
-static const char UART_DLH       = 0x01; // R/W - only accessible when EFR[4] = 1 and MCR[2] = 1
-static const char UART_EFR       = 0x02; // ?   - only accessible when LCR is 0xBF
-static const char UART_TCR       = 0x06; // R/W - only accessible when EFR[4] = 1 and MCR[2] = 1
-static const char UART_TLR       = 0x07; // R/W - only accessible when EFR[4] = 1 and MCR[2] = 1
+using namespace rpi;
 
 // UART flags
 static const char UART_CHANNEL_SHIFT           = 1;
@@ -220,14 +208,14 @@ static const char UART_LCR_DIV_LATCH_EN        = 0x80;
 static const char UART_EFR_ENABLE_ENHANCED_FNS = 0x10;
 static const char UART_IOControl_RESET         = 0x08;
 
-static void uart_write_register(size_t spiChannel, size_t uartChannel, char reg, char data) {
+void uart_write_register(size_t spiChannel, size_t uartChannel, char reg, char data) {
   char req[2] = {0};
   req[0] = (uartChannel << UART_CHANNEL_SHIFT) | (reg << UART_ADDR_SHIFT);
   req[1] = data;
   spi_send_recv(spiChannel, req, 2, NULL, 0);
 }
 
-static char uart_read_register( size_t spiChannel, size_t uartChannel, char reg) {
+char uart_read_register(size_t spiChannel, size_t uartChannel, char reg) {
   char req[2] = {0};
   char res[2] = {0};
   req[0] = (uartChannel << UART_CHANNEL_SHIFT) | (reg << UART_ADDR_SHIFT) | UART_READ_ENABLE;
@@ -242,11 +230,18 @@ static void uart_init_channel(size_t spiChannel, size_t uartChannel, size_t baud
   uart_write_register(spiChannel, uartChannel, UART_DLH, (bauddiv & 0xFF00) >> 8);
   uart_write_register(spiChannel, uartChannel, UART_DLL, (bauddiv & 0x00FF));
 
-  // set serial byte configuration: 8 bit, no parity, 1 stop bit
-  uart_write_register(spiChannel, uartChannel, UART_LCR, uartChannel == 0 ? 0x3 : 0x7);
+  bool is_channel_0 = uartChannel == 0;
+  char lcr_data = is_channel_0 ? 0x3 : 0x7;
+    // set serial byte configuration: 8 bit, no parity, 1 stop bit
+  uart_write_register(spiChannel, uartChannel, UART_LCR, lcr_data);
 
+  char fcr_data = UART_FCR_RX_FIFO_RESET | UART_FCR_TX_FIFO_RESET;
+  if (is_channel_0) {
+    uart_write_register(spiChannel, uartChannel, UART_EFR, UART_EFR_ENABLE_ENHANCED_FNS);
+    fcr_data |= UART_FCR_FIFO_EN;
+  }
   // clear and enable fifos, (wait since clearing fifos takes time)
-  uart_write_register(spiChannel, uartChannel, UART_FCR, UART_FCR_RX_FIFO_RESET | UART_FCR_TX_FIFO_RESET | UART_FCR_FIFO_EN);
+  uart_write_register(spiChannel, uartChannel, UART_FCR, fcr_data);
   for (int i = 0; i < 65535; ++i) asm volatile("yield");
 }
 
@@ -254,6 +249,26 @@ void init_uart(uint32_t spiChannel) {
   uart_write_register(spiChannel, 0, UART_IOControl, UART_IOControl_RESET); // resets both channels
   uart_init_channel(spiChannel, 0, 115200);
   uart_init_channel(spiChannel, 1,   2400);
+}
+
+bool is_clear_to_send(size_t spi_channel, size_t uart_channel) {
+  return (uart_read_register(spi_channel, uart_channel, UART_MSR) & (1 << 4)) != 0;
+}
+
+bool is_uart_readable(size_t spi_channel, size_t uart_channel) {
+  return uart_read_register(spi_channel, uart_channel, UART_RXLVL) != 0;
+}
+
+bool is_uart_writable(size_t spi_channel, size_t uart_channel) {
+  return uart_read_register(spi_channel, uart_channel, UART_TXLVL) != 0;
+}
+
+void uart_write(size_t spi_channel, size_t uart_channel, char c) {
+  uart_write_register(spi_channel, uart_channel, UART_THR, c);
+}
+
+char uart_read(size_t spi_channel, size_t uart_channel) {
+  return uart_read_register(spi_channel, uart_channel, UART_RHR);
 }
 
 char uart_getc(size_t spiChannel, size_t uartChannel) {

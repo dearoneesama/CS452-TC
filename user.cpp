@@ -416,3 +416,91 @@ void first_user_task() {
 }
 
 } // namespace k3
+
+namespace k4 {
+struct time_percentage_t {
+  uint32_t kernel;
+  uint32_t user;
+  uint32_t idle;
+};
+
+struct idle_message_t {
+  char n;
+  time_percentage_t percentages;
+};
+
+void display_controller() {
+  RegisterAs("displayc");
+  tid_t uart_server = WhoIs("txuarts0");
+  int request_tid;
+  const char* idle_format = "\0337\033[1;80H\033[KKernel: {}%  User: {}%  Idle: {}%\r\n\0338";
+  char buffer[128];
+  char message[128];
+  while (1) {
+    int request = Receive(&request_tid, message, 128);
+    if (request <= 0) continue;
+
+    switch (message[0]) {
+      case 'i': { // idle
+        idle_message_t* idle_msg = (idle_message_t*) message;
+        auto len = troll::snformat(buffer, idle_format,
+          idle_msg->percentages.kernel,
+          idle_msg->percentages.user,
+          idle_msg->percentages.idle);
+        for (size_t i = 0; i < len; ++i) {
+          Putc(uart_server, 0, buffer[i]);
+        }
+        Reply(request_tid, "o", 1);
+      }
+      default: {
+        break;
+      }
+    }
+  }
+}
+
+void idle_task() {
+  tid_t display_ctrl = WhoIs("displayc");
+
+  time_percentage_t prev_percentages = {0, 0, 0};
+  time_percentage_t curr_percentages = {0, 0, 0};
+  time_distribution_t td = {0, 0, 0};
+  idle_message_t message = { 'i', {0, 0, 0} };
+  size_t entries = 10;
+
+  char reply;
+  while (1) {
+    --entries;
+    // only print every 10 entries to the idle task to save the planet even more
+    if (entries == 0) {
+      entries = 10;
+      TimeDistribution(&td);
+      curr_percentages.kernel = (td.kernel_ticks * 100) / td.total_ticks;
+      curr_percentages.user = ((td.total_ticks - td.kernel_ticks - td.idle_ticks) * 100) / td.total_ticks;
+      curr_percentages.idle = (td.idle_ticks * 100) / td.total_ticks;
+
+      // only print if the percentages are different
+      if (curr_percentages.idle != prev_percentages.idle ||
+          curr_percentages.user != prev_percentages.user || 
+          curr_percentages.kernel != prev_percentages.kernel) {
+        message.percentages = curr_percentages;
+        Send(display_ctrl, (char*) &message, sizeof(message), &reply, 1);
+        prev_percentages = curr_percentages;
+      }
+    }
+    SaveThePlanet();
+  }
+}
+
+void first_user_task() {
+  Create(PRIORITY_L1, nameserver);
+  Create(PRIORITY_L1, clockserver);
+  Create(PRIORITY_L1, clocknotifier);
+  Create(PRIORITY_L1, [] { tx_uartserver(0); });
+  Create(PRIORITY_L1, [] { rx_uartserver(0); });
+
+  Create(PRIORITY_L1, display_controller);
+  Create(PRIORITY_IDLE, idle_task);
+}
+
+} // namespace k4

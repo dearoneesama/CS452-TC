@@ -10,6 +10,7 @@ static const uint32_t GIC_400_CPU_INTERFACE_BASE = GIC_400_BASE + 0x2000;
 
 static const uint32_t VIDEO_CORE_BASE = 96;
 static const uint32_t SYSTEM_TIMER_C1 = VIDEO_CORE_BASE + 1;
+static const uint32_t GPIO_IRQ = VIDEO_CORE_BASE + 49;
 static const uint32_t INTERRUPT_ID_MASK = 0x3FF; // bits[0:9]
 
 // ARM GIC spec page 93
@@ -36,6 +37,9 @@ namespace irq {
 void initialize_irq() {
   set_enable_irq_by_id(SYSTEM_TIMER_C1);
   set_target_irq_by_id(SYSTEM_TIMER_C1);
+
+  set_enable_irq_by_id(GPIO_IRQ);
+  set_target_irq_by_id(GPIO_IRQ);
 }
 
 // ARM GIC spec page 76 and 135
@@ -51,8 +55,12 @@ void end_interrupt(uint32_t iar) {
   *reinterpret_cast<uint32_t*>(GIC_400_CPU_INTERFACE_BASE + 0x10) = iar;
 }
 
-bool is_timer_interrupt(uint32_t iar) {
-  return iar == SYSTEM_TIMER_C1;
+bool is_timer_interrupt(uint32_t irq_id) {
+  return irq_id == SYSTEM_TIMER_C1;
+}
+
+bool is_gpio_interrupt(uint32_t irq_id) {
+  return irq_id == GPIO_IRQ;
 }
 
 } // namespace irq

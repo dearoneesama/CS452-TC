@@ -61,7 +61,7 @@ namespace kernel {
     void k_await_event(task_descriptor *curr_task);
     void k_exit(task_descriptor *curr_task);
 
-    void wake_up_tasks_on_event(int event_id, int return_value);
+    void wake_up_tasks_on_event(events_t event_id, int return_value);
 
     // configure hardware cache (performance syscalls)
     void kp_dcache(task_descriptor *curr_task);

@@ -5,6 +5,7 @@
 #include "timer.hpp"
 #include "format.hpp"
 #include "irq.include"
+#include "gpio.hpp"
 
 void initialize() {
   // run static/global constructors manually
@@ -34,6 +35,7 @@ int main() {
   timer.initialize();
   kernel::task_manager task_manager;
   kernel::context_t kernel_context;
+  gpio::uart_interrupt_state uart_irq_state;
 
   uart_puts(0, 0, SC_CLRSCR, LEN_LITERAL(SC_CLRSCR));
 
@@ -115,8 +117,8 @@ int main() {
       }
       case SYSCALLN_SAVETHEPLANET: {
         // note: only the idle task should call this
-        // also note that userspace is NOT able to call wfi
-        // see: https://patchwork.kernel.org/project/linux-arm-kernel/patch/20180807093326.5090-1-marc.zyngier@arm.com/
+        // also note that userspace is not able to call wfi
+        // even though SCTLR_EL1 is configured to not trap wfi
         asm volatile("dsb ish");
         asm volatile("wfi");
         end_time = timer.read_current_tick();
@@ -126,12 +128,12 @@ int main() {
         idle_ticks += elapsed_time;
 
         start_time = end_time;
-        kernel::handle_interrupt(task_manager, timer);
+        kernel::handle_interrupt(task_manager, timer, uart_irq_state);
         task_manager.ready_push(current_task);
         break;
       }
       case IRQ: {
-        kernel::handle_interrupt(task_manager, timer);
+        kernel::handle_interrupt(task_manager, timer, uart_irq_state);
         task_manager.ready_push(current_task);
         break;
       }

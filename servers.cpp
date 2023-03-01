@@ -5,6 +5,7 @@
 #include "utils.hpp"
 #include "user_syscall.h"
 #include "rpi.hpp"
+#include "notifiers.hpp"
 
 void nameserver() {
   troll::string_map<tid_t, MAX_TASK_NAME_LENGTH, MAX_NUM_TASKS> lookup;
@@ -238,5 +239,133 @@ void clockserver() {
       }
       default: break;
     }
+  }
+}
+
+void tx_uartserver(char uart_channel) {
+  if (uart_channel == 0) {
+    RegisterAs("txuarts0");
+  } else {
+    RegisterAs("txuarts1");
+  }
+
+  tid_t notifier = Create(priority_t::PRIORITY_L5, tx_uartnotifier);
+  tid_t request_tid;
+  char msg;
+  Receive((int*)&request_tid, &msg, 1);
+  char config[2];
+  config[0] = uart_channel == 0 ? 0 : 1;
+  config[1] = uart_channel;
+  Reply(notifier, config, 2);
+
+  char buffer[2];
+  etl::queue<tid_t, 50> requester_queue;
+  etl::queue<char, 50> char_queue;
+  const char* reply = "o";
+
+  while (1) {
+    int request = Receive((int*)&request_tid, buffer, 2);
+    if (request <= 0) continue;
+
+    switch (buffer[0]) {
+      case 'n': {
+        // notifier
+        tid_t requester;
+        char c;
+        while (!requester_queue.empty() && is_uart_writable(0, uart_channel)) {
+          requester = requester_queue.front();
+          requester_queue.pop();
+          c = char_queue.front();
+          char_queue.pop();
+          uart_write(0, uart_channel, c);
+          Reply(requester, reply, 1);
+        }
+        break;
+      }
+      case 'p': {
+        // putc
+        requester_queue.push(request_tid);
+        char_queue.push(buffer[1]);
+        tid_t requester;
+        char c;
+        while (!requester_queue.empty() && is_uart_writable(0, uart_channel)) {
+          requester = requester_queue.front();
+          requester_queue.pop();
+          c = char_queue.front();
+          char_queue.pop();
+          uart_write(0, uart_channel, c);
+          Reply(requester, reply, 1);
+        }
+
+        if (!requester_queue.empty()) {
+          Reply(notifier, reply, 1);
+        }
+        break;
+      }
+      default: {
+        break;
+      }
+    }
+  }
+}
+
+void rx_uartserver(char uart_channel) {
+  if (uart_channel == 0) {
+    RegisterAs("rxuarts0");
+  } else {
+    RegisterAs("rxuarts1");
+  }
+
+  tid_t notifier = Create(priority_t::PRIORITY_L5, rx_uartnotifier);
+  tid_t request_tid;
+  char msg;
+  Receive((int*)&request_tid, &msg, 1);
+  char config = uart_channel;
+  Reply(notifier, &config, 1);
+
+  etl::queue<tid_t, 50> requester_queue;
+  etl::queue<char, 512> char_queue;
+
+  char buffer;
+  const char *reply = "o";
+  while (1) {
+    int request = Receive((int*)&request_tid, &buffer, 1);
+    if (request <= 0) continue;
+
+    switch (buffer) {
+      case 'n':
+        // notifier
+        while (is_uart_readable(0, uart_channel)) {
+          char_queue.push(uart_read(0, uart_channel));
+          if (!requester_queue.empty()) {
+            char c = char_queue.front();
+            char_queue.pop();
+            tid_t requester = requester_queue.front();
+            requester_queue.pop();
+            Reply(requester, &c, 1);
+          }
+        }
+        break;
+      case 'g': {
+        // getc
+        requester_queue.push(request_tid);
+        while (is_uart_readable(0, uart_channel)) {
+          char_queue.push(uart_read(0, uart_channel));
+          if (!requester_queue.empty()) {
+            char c = char_queue.front();
+            char_queue.pop();
+            tid_t requester = requester_queue.front();
+            requester_queue.pop();
+            Reply(requester, &c, 1);
+          }
+        }
+        if (!requester_queue.empty()) {
+          Reply(notifier, reply, 1);
+        }
+        break;
+      }
+      default:
+        break;
+      }
   }
 }

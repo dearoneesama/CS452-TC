@@ -28,7 +28,7 @@ struct time_distribution_t {
   uint64_t idle_ticks;
 };
 
-static constexpr size_t NUM_PRIORITIES = PRIORITY_UNDEFINED;
+static constexpr size_t NUM_PRIORITIES = priority_t::PRIORITY_UNDEFINED;
 
 static constexpr size_t TASK_STACK_SIZE/*_BYTES*/ = 1024 * 1024;
 static constexpr size_t MAX_NUM_TASKS = 50;
@@ -43,7 +43,19 @@ static_assert(!(TASK_STACK_SIZE % SP_ALIGNMENT));
 
 #define EXITED_PARENT_MASK (1 << 31)
 
-static constexpr size_t MAX_NUM_EVENTS = 1;
+enum events_t {
+  TIMER = 0,
+  // for gtkterm
+  UART_R0,
+  UART_T0,
+  // for merklin
+  UART_R1,
+  UART_T1,
+  CTS_1,
+  EVENT_UNDEFINED,
+};
+
+static constexpr size_t MAX_NUM_EVENTS = events_t::EVENT_UNDEFINED;
 
 #include "user_syscall.include"
 

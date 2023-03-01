@@ -198,7 +198,7 @@ void task_manager::k_await_event(task_descriptor *curr_task) {
   }
 }
 
-void task_manager::wake_up_tasks_on_event(int event_id, int return_value) {
+void task_manager::wake_up_tasks_on_event(events_t event_id, int return_value) {
   auto& event_queue = event_queues[event_id];
   if (!event_queue.size()) {
     DEBUG_LITERAL("[kernel] no task is waiting on event!\r\n");

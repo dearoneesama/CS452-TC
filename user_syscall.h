@@ -33,3 +33,7 @@ extern "C" void TimeDistribution(time_distribution_t* time_distribution);
 
 // put cpu into low power
 extern "C" void SaveThePlanet();
+
+// uart
+int Getc(int tid, int channel);
+int Putc(int tid, int channel, char c);
