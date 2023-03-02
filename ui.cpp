@@ -8,7 +8,11 @@
 
 namespace ui {
 const size_t num_solenoids = 22;
-const char active_solenoids[] = { 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 0x99, 0x9A, 0x9B, 0x9C };
+
+const char active_solenoids[] = {
+     1,    2,  3,  4,  5,  6,  7,  8,    9,   10,
+    11,   12, 13, 14, 15, 16, 17, 18, 0x99, 0x9A, // 153, 154
+  0x9B, 0x9C }; // 155, 156
 
 void display_controller_task() {
   RegisterAs(DISPLAY_CONTROLLER_NAME);
@@ -18,6 +22,20 @@ void display_controller_task() {
   const char* idle_format = "\0337\033[1;1H\033[KKernel: {}%  User: {}%  Idle: {}%\0338";
   const char* timer_format = "\0337\033[2;1H\033[KTime: {}:{}:{}:{}\0338";
   const char* sensor_format = "\0337\033[3;1H\033[KSensors: {}\0338";
+  const char* move_cursor_write_format = "\0337\033[{}:{}H\033[K{}\0338";
+
+  const int offset_col = 16;
+  const int offset_per_index = 7;
+  const int offset_row = 4;
+
+  // xxx: (s|c|?)
+  const char* init_switch_table = "\0337\033[4;1J\033[KSwitches:   1: ?   2: ?   3: ?   4: ?   5: ?   6: ?   7: ?   8: ?   9: ?  10: ?" \
+                                           "\r\n           11: ?  12: ?  13: ?  14: ?  15: ?  16: ?  17: ?  18: ? 153: ? 154: ?" \
+                                           "\r\n          155: ? 156: ?\0338";
+
+  for (size_t i = 0; i < 198; ++i) {
+    Putc(gtkterm_tx, 0, init_switch_table[i]);
+  }
 
   char buffer[128];
   char message[128];
@@ -67,8 +85,37 @@ void display_controller_task() {
       case display_msg_header::SENSOR_MSG: { // sensors
         message[request] = '\0';
         auto len = troll::snformat(buffer, sensor_format, message + 1);
-        for (size_t i = 1; i < len; ++i) {
-          Putc(gtkterm_tx, 0, message[i]);
+        for (size_t i = 0; i < len; ++i) {
+          Putc(gtkterm_tx, 0, buffer[i]);
+        }
+        Reply(request_tid, reply, 1);
+        break;
+      }
+      case display_msg_header::SWITCHES: { // we assume that only changing active switches will go through here
+        trains::switch_cmd* cmd = (trains::switch_cmd*) (message+1);
+        char dir = cmd->switch_dir == trains::switch_dir_t::C ? 'C' : 'S';
+        int switch_num = cmd->switch_num;
+        int row, col;
+        if (switch_num <= 10) {
+          // first row
+          row = offset_row;
+          col = offset_col + (switch_num - 1) * offset_per_index;
+        } else if (switch_num <= 154) {
+          // second row
+          row = offset_row + 1;
+          if (switch_num == 153 || switch_num == 154) {
+            col = offset_col + (switch_num - 153 + 8) * offset_per_index;
+          } else {
+            col = offset_col + (switch_num - 11) * offset_per_index;
+          }
+        } else {
+          // last row
+          row = offset_row + 2;
+          col = offset_col + (switch_num - 155) * offset_per_index;
+        }
+        auto len = troll::snformat(buffer, move_cursor_write_format, row, col, dir);
+        for (size_t i = 0; i < len; ++i) {
+          Putc(gtkterm_tx, 0, buffer[i]);
         }
         Reply(request_tid, reply, 1);
         break;
@@ -113,11 +160,16 @@ void command_controller_task() {
   };
 
   char speed_cmd_msg[1 + sizeof(trains::speed_cmd)];
-  speed_cmd_msg[0] = trains::tc_msg_header::SPEED;
+  speed_cmd_msg[0] = static_cast<char>(trains::tc_msg_header::SPEED);
 
   trains::speed_cmd *scmd = (trains::speed_cmd*)(speed_cmd_msg+1);
   trains::reverse_cmd rcmd = {0};
-  trains::switch_cmd swcmd = {0, trains::switch_dir_t::NONE};
+
+  char switch_cmd_msg[1 + sizeof(trains::switch_cmd)];
+  switch_cmd_msg[0] = static_cast<char>(display_msg_header::SWITCHES);
+  trains::switch_cmd *swcmd = (trains::switch_cmd*)(switch_cmd_msg+1);
+  swcmd->switch_dir = trains::switch_dir_t::NONE;
+  swcmd->switch_num = 0;
 
   while (1) {
     char c = Getc(gtkterm_rx, 0);
@@ -156,10 +208,11 @@ void command_controller_task() {
           // filter out the solenoids that are not even on the track
           for (size_t i = 0; i < num_solenoids; ++i) {
             if (arg1 == active_solenoids[i]) {
-              swcmd.switch_num = arg1;
-              swcmd.switch_dir = arg2 == 'S' ? trains::switch_dir_t::S : trains::switch_dir_t::C;
-              int replylen = Send(switch_task, (char*)&swcmd, sizeof(trains::switch_cmd), &reply, 1);
+              swcmd->switch_num = arg1;
+              swcmd->switch_dir = arg2 == 'S' ? trains::switch_dir_t::S : trains::switch_dir_t::C;
+              int replylen = Send(switch_task, (char*)swcmd, sizeof(trains::switch_cmd), &reply, 1);
               if (replylen == 1 && reply == static_cast<char>(trains::tc_reply::OK)) {
+                Send(display_controller, switch_cmd_msg, 1 + sizeof(trains::switch_cmd), &reply, 1);
                 valid = true;
               }
               break;

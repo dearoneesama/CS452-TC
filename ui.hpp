@@ -10,6 +10,7 @@ enum display_msg_header {
   USER_INPUT = 'u',
   STRING = 's',
   TIMER_CLOCK_MSG = 't',
+  SWITCHES = 'w',
 };
 
 struct timer_clock_t {
