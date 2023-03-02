@@ -236,7 +236,8 @@ static void uart_init_channel(size_t spiChannel, size_t uartChannel, size_t baud
   if (is_channel_0) {
     uart_write_register(spiChannel, uartChannel, UART_EFR, UART_EFR_ENABLE_ENHANCED_FNS);
   } else {
-    uart_write_register(spiChannel, uartChannel, UART_EFR, UART_AUTO_CTS);
+    // TODO: investigate
+    // uart_write_register(spiChannel, uartChannel, UART_EFR, UART_AUTO_CTS);
   }
 
   char lcr_data = is_channel_0 ? 0x3 : 0x7;
