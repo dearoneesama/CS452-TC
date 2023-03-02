@@ -107,6 +107,7 @@ void merklin_txserver() {
         if (cts_gone_back_up) {
           cts = true;
         }
+        Reply(cts_notifier, reply, 1);
         break;
       }
       default: break;
@@ -120,7 +121,6 @@ void merklin_txserver() {
       cts = false;
 
       Reply(tx_notifier, reply, 1);
-      Reply(cts_notifier, reply, 1);
     }
   }
 }

@@ -230,7 +230,7 @@ void task_manager::k_await_event(task_descriptor *curr_task, gpio::uart_interrup
 void task_manager::wake_up_tasks_on_event(events_t event_id, int return_value) {
   auto& event_queue = event_queues[event_id];
   if (!event_queue.size()) {
-    DEBUG_LITERAL("[kernel] no task is waiting on event!\r\n");
+    // DEBUG_LITERAL("[kernel] no task is waiting on event!\r\n");
     // missed_event_queues[event_id] = return_value;
   }
   while (event_queue.size()) {

@@ -16,22 +16,20 @@ void switch_task() {
   buffer[0] = static_cast<char>(tc_msg_header::SWITCH_CMD_PART_1);
   char turnoff_msg = static_cast<char>(tc_msg_header::SWITCH_CMD_PART_2);
   switch_cmd *msg = (switch_cmd*)(buffer+1);
-  char reply;
+  char reply = tc_reply::OK;
 
   while (1) {
     int request = Receive((int*)&request_tid, (char*)msg, sizeof(switch_cmd));
     if (request <= 0) continue;
+    Reply(request_tid, &reply, 1);
     int replylen = Send(train_controller, buffer, buffer_size, &reply, 1);
 
     // if the switch was already at that position
     if (replylen == 1 && reply == static_cast<char>(tc_reply::SWITCH_UNCHANGED)) {
-      Reply(request_tid, &reply, 1);
     } else {
-      Delay(clock_server, 20); // 200ms
+      Delay(clock_server, 30); // 300ms
       Send(train_controller, &turnoff_msg, 1, &reply, 1);
-      Reply(request_tid, &reply, 1);
     }
-
   }
 }
 
@@ -45,23 +43,26 @@ void reverse_task() {
   char buffer[buffer_size] = {0};
   
   reverse_cmd *msg = (reverse_cmd*)(buffer+1);
-  char reply;
+  char reply = tc_reply::OK;
 
   while (1) {
     int request = Receive((int*)&request_tid, (char*)msg, sizeof(reverse_cmd));
     if (request <= 0) continue;
+    Reply(request_tid, &reply, 1);
 
     buffer[0] = static_cast<char>(tc_msg_header::REVERSE_CMD_PART_1);
+
     int replylen = Send(train_controller, buffer, buffer_size, &reply, 1);
 
     // need to think about what really happens if we send multiple reverse commands
     if (replylen == 1 && reply == static_cast<char>(tc_reply::TRAIN_ALREADY_REVERSING)) {
-      Reply(request_tid, &reply, 1);
     } else {
       Delay(clock_server, 300); // 3 seconds or 3000ms
       buffer[0] = static_cast<char>(tc_msg_header::REVERSE_CMD_PART_2);
       Send(train_controller, buffer, buffer_size, &reply, 1);
-      Reply(request_tid, &reply, 1);
+      Delay(clock_server, 100);
+      buffer[0] = static_cast<char>(tc_msg_header::REVERSE_CMD_PART_3);
+      Send(train_controller, buffer, buffer_size, &reply, 1);
     }
   }
 }
@@ -134,6 +135,10 @@ void sensor_task() {
   char reply;
 
   while (1) {
+    if (display_controller < 1) {
+      display_controller = WhoIs(ui::DISPLAY_CONTROLLER_NAME);
+    }
+
     int replylen = Send(train_controller, &cmd, 1, sensor_bytes, 10);
     if (replylen == 10) {
       char contact_1_8, contact_9_16;
@@ -221,9 +226,16 @@ void train_controller_task() {
         Putc(merklin_tx, 1, 15);
         Putc(merklin_tx, 1, (char)train_num);
 
+        reply = static_cast<char>(tc_reply::OK);
+        Reply(request_tid, &reply, 1);
+        break;
+      }
+      case tc_msg_header::REVERSE_CMD_PART_3: {
+        reverse_cmd* cmd = (reverse_cmd*)(message+1);
+        int train_num = cmd->train;
+
         Putc(merklin_tx, 1, train_speeds[train_num]);
         Putc(merklin_tx, 1, (char)train_num);
-
         is_train_reversing[train_num] = false;
         reply = static_cast<char>(tc_reply::OK);
         Reply(request_tid, &reply, 1);
@@ -253,6 +265,8 @@ void train_controller_task() {
       }
       case tc_msg_header::SWITCH_CMD_PART_2: {
         Putc(merklin_tx, 1, static_cast<char>(special_cmd::TURNOFF_SWITCH));
+        reply = static_cast<char>(tc_reply::OK);
+        Reply(request_tid, &reply, 1);
         break;
       }
       case tc_msg_header::SPEED: {

@@ -40,3 +40,5 @@ extern "C" int UartWriteRegister(int channel, char reg, char data);
 extern "C" int UartReadRegister(int channel, char reg);
 int Getc(int tid, int channel);
 int Putc(int tid, int channel, char c);
+int Puts(int tid, int channel, const char* s, size_t len);
+int Puts(int tid, int channel, const char* s);

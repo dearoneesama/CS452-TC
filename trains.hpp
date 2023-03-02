@@ -12,7 +12,8 @@ enum tc_msg_header {
   SPEED = 'd',
 
   REVERSE_CMD_PART_1 = 'r', // makes the train stop
-  REVERSE_CMD_PART_2 = 'v', // reverse and accel
+  REVERSE_CMD_PART_2 = 'v', // reverse, not accel
+	REVERSE_CMD_PART_3 = 'a', // reaccel
 
   SWITCH_CMD_PART_1 = 's', // change direction
   SWITCH_CMD_PART_2 = 'w', // turn off

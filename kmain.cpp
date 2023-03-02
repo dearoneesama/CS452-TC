@@ -38,6 +38,7 @@ int main() {
   gpio::uart_interrupt_state uart_irq_state;
 
   uart_puts(0, 0, SC_CLRSCR, LEN_LITERAL(SC_CLRSCR));
+  uart_puts(0, 0, SC_HIDCUR, LEN_LITERAL(SC_HIDCUR));
 
   // spawn first task
   auto *current_task = task_manager.new_task(KERNEL_TID, 1, PRIORITY_L2);
@@ -174,5 +175,6 @@ int main() {
     }
   }
   uart_puts(0, 0, "Finished processing all tasks!\r\n", 32);
+  uart_puts(0, 0, SC_SHWCUR, LEN_LITERAL(SC_SHWCUR));
   return 0;
 }

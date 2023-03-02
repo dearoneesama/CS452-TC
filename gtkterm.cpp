@@ -26,13 +26,15 @@ void gtkterm_txnotifier() {
   }
 }
 
+static constexpr size_t MAX_QUEUED_CHARS = 1024;
+
 void gtkterm_rxserver() {
   RegisterAs(GTK_RX_SERVER_NAME);
   tid_t notifier = Create(priority_t::PRIORITY_L1, gtkterm_rxnotifier);
   tid_t request_tid;
   char message[1];
   etl::queue<tid_t, 50> requester_queue;
-  etl::queue<char, 512> char_queue;
+  etl::queue<char, MAX_QUEUED_CHARS> char_queue;
   const char* reply = "o";
   bool notifier_is_parked = false;
 
@@ -81,7 +83,7 @@ void gtkterm_txserver() {
   tid_t notifier = Create(priority_t::PRIORITY_L1, gtkterm_txnotifier);
   tid_t request_tid;
   char message[2];
-  etl::queue<char, 512> char_queue;
+  etl::queue<char, MAX_QUEUED_CHARS> char_queue;
   const char* reply = "o";
   char c;
   bool notifier_is_parked = false;

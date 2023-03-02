@@ -23,20 +23,18 @@ void display_controller_task() {
   const char* idle_format = "\0337\033[1;1H\033[KKernel: {}%  User: {}%  Idle: {}%\0338";
   const char* timer_format = "\0337\033[2;1H\033[KTime: {}:{}:{}:{}\0338";
   const char* sensor_format = "\0337\033[3;1H\033[KSensors: {}\0338";
-  const char* move_cursor_write_format = "\0337\033[{}:{}H\033[K{}\0338";
+  const char* move_cursor_write_format = "\0337\033[{};{}H{}\0338";
 
   const int offset_col = 16;
   const int offset_per_index = 7;
   const int offset_row = 4;
 
   // xxx: (s|c|?)
-  const char* init_switch_table = "\0337\033[4;1J\033[KSwitches:   1: ?   2: ?   3: ?   4: ?   5: ?   6: ?   7: ?   8: ?   9: ?  10: ?" \
+  const char *init_switch_table = "\0337\033[4;1H\033[KSwitches:   1: ?   2: ?   3: ?   4: ?   5: ?   6: ?   7: ?   8: ?   9: ?  10: ?" \
                                            "\r\n           11: ?  12: ?  13: ?  14: ?  15: ?  16: ?  17: ?  18: ? 153: ? 154: ?" \
                                            "\r\n          155: ? 156: ?\0338";
 
-  for (size_t i = 0; i < 198; ++i) {
-    Putc(gtkterm_tx, 0, init_switch_table[i]);
-  }
+  Puts(gtkterm_tx, 0, init_switch_table);
 
   char buffer[128];
   char message[128];
@@ -52,9 +50,7 @@ void display_controller_task() {
           percentages->kernel,
           percentages->user,
           percentages->idle);
-        for (size_t i = 0; i < len; ++i) {
-          Putc(gtkterm_tx, 0, buffer[i]);
-        }
+        Puts(gtkterm_tx, 0, buffer, len);
         Reply(request_tid, reply, 1);
         break;
       }
@@ -64,9 +60,7 @@ void display_controller_task() {
         break;
       }
       case display_msg_header::STRING: { // string
-        for (int i = 1; i < request; ++i) {
-          Putc(gtkterm_tx, 0, message[i]);
-        }
+        Puts(gtkterm_tx, 0, message + 1, request - 1);
         Reply(request_tid, reply, 1);
         break;
       }
@@ -77,24 +71,20 @@ void display_controller_task() {
           time->minutes,
           time->seconds,
           time->hundred_ms);
-        for (size_t i = 0; i < len; ++i) {
-          Putc(gtkterm_tx, 0, buffer[i]);
-        }
+        Puts(gtkterm_tx, 0, buffer, len);
         Reply(request_tid, reply, 1);
         break;
       }
       case display_msg_header::SENSOR_MSG: { // sensors
         message[request] = '\0';
         auto len = troll::snformat(buffer, sensor_format, message + 1);
-        for (size_t i = 0; i < len; ++i) {
-          Putc(gtkterm_tx, 0, buffer[i]);
-        }
+        Puts(gtkterm_tx, 0, buffer, len);
         Reply(request_tid, reply, 1);
         break;
       }
       case display_msg_header::SWITCHES: { // we assume that only changing active switches will go through here
         trains::switch_cmd* cmd = (trains::switch_cmd*) (message+1);
-        char dir = cmd->switch_dir == trains::switch_dir_t::C ? 'C' : 'S';
+        const char *dir = cmd->switch_dir == trains::switch_dir_t::C ? "C" : "S";
         int switch_num = cmd->switch_num;
         int row, col;
         if (switch_num <= 10) {
@@ -115,9 +105,7 @@ void display_controller_task() {
           col = offset_col + (switch_num - 155) * offset_per_index;
         }
         auto len = troll::snformat(buffer, move_cursor_write_format, row, col, dir);
-        for (size_t i = 0; i < len; ++i) {
-          Putc(gtkterm_tx, 0, buffer[i]);
-        }
+        Puts(gtkterm_tx, 0, buffer, len);
         Reply(request_tid, reply, 1);
         break;
       }
@@ -211,7 +199,7 @@ void command_controller_task() {
           for (size_t i = 0; i < num_solenoids; ++i) {
             if (arg1 == active_solenoids[i]) {
               swcmd->switch_num = arg1;
-              swcmd->switch_dir = arg2 == 'S' ? trains::switch_dir_t::S : trains::switch_dir_t::C;
+              swcmd->switch_dir = char_arg == 'S' ? trains::switch_dir_t::S : trains::switch_dir_t::C;
               int replylen = Send(switch_task, (char*)swcmd, sizeof(trains::switch_cmd), &reply, 1);
               if (replylen == 1 && reply == static_cast<char>(trains::tc_reply::OK)) {
                 Send(display_controller, switch_cmd_msg, 1 + sizeof(trains::switch_cmd), &reply, 1);
