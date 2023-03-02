@@ -20,6 +20,8 @@ enum tc_msg_header {
   SENSOR_CMD = 'n',
 
   GO_CMD = 'g',
+
+  SET_RESET_MODE = 'm',
 };
 
 struct reverse_cmd {

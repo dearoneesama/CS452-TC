@@ -320,7 +320,7 @@ void initialize() {
   tid_t train_controller = WhoIs(trains::TRAIN_CONTROLLER_NAME);
   tid_t switch_task = WhoIs(trains::SWITCH_TASK_NAME);
 
-  char message = static_cast<char>(trains::special_cmd::GO);
+  char message = static_cast<char>(trains::tc_msg_header::GO_CMD);
   char reply;
   int replylen = Send(train_controller, &message, 1, &reply, 1);
   if (replylen != 1 || reply != static_cast<char>(trains::tc_reply::OK)) {
@@ -328,7 +328,7 @@ void initialize() {
     return;
   }
 
-  message = static_cast<char>(trains::special_cmd::RESET_MODE);
+  message = static_cast<char>(trains::tc_msg_header::SET_RESET_MODE);
   replylen = Send(train_controller, &message, 1, &reply, 1);
   if (replylen != 1 || reply != static_cast<char>(trains::tc_reply::OK)) {
     DEBUG_LITERAL("Could not send RESET MODE command\r\n");

@@ -272,6 +272,18 @@ void train_controller_task() {
         }
         break;
       }
+      case tc_msg_header::GO_CMD: {
+        Putc(merklin_tx, 1, static_cast<char>(special_cmd::GO));
+        reply = static_cast<char>(tc_reply::OK);
+        Reply(request_tid, &reply, 1);
+        break;
+      }
+      case tc_msg_header::SET_RESET_MODE: {
+        Putc(merklin_tx, 1, static_cast<char>(special_cmd::RESET_MODE));
+        reply = static_cast<char>(tc_reply::OK);
+        Reply(request_tid, &reply, 1);
+        break;
+      }
       default: break;
     }
   }
