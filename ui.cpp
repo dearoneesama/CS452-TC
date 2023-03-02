@@ -5,6 +5,7 @@
 #include "format.hpp"
 #include "trains.hpp"
 #include "format_scan.hpp"
+#include "rpi.hpp"
 
 namespace ui {
 const size_t num_solenoids = 22;
@@ -144,6 +145,7 @@ void command_controller_task() {
 
   const char *history = "s\033[49;1H\033[K> ";
   const char *clear_line = "s\033[50;1H\033[K> ";
+  const char *back_space = "s\033[1D\033[K";
   Send(display_controller, clear_line, 13, &reply, 1);
 
   auto is_valid_train = [](int arg) {
@@ -226,6 +228,9 @@ void command_controller_task() {
       }
       Send(display_controller, clear_line, 13, &reply, 1);
       curr_size = 1;
+    } else if (c == 8 && curr_size > 1) { // back space
+      curr_size--;
+      Send(display_controller, back_space, 8, &reply, 1);
     } else if (curr_size < 65) {
       command_buffer[curr_size++] = c;
       input_msg[1] = c;
@@ -306,6 +311,21 @@ void idle_task() {
     }
     SaveThePlanet();
   }
+}
+
+void initialize() {
+  tid_t display_controller = WhoIs(DISPLAY_CONTROLLER_NAME);
+  tid_t train_controller = WhoIs(trains::TRAIN_CONTROLLER_NAME);
+
+  char message = static_cast<char>(trains::special_cmd::GO);
+  char reply;
+  int replylen = Send(train_controller, &message, 1, &reply, 1);
+  if (replylen != 1 || reply != static_cast<char>(trains::tc_reply::OK)) {
+    DEBUG_LITERAL("Could not send GO command\r\n");
+    return;
+  }
+
+
 }
 
 void init_tasks() {
