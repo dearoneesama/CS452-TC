@@ -316,6 +316,7 @@ void idle_task() {
 void initialize() {
   tid_t display_controller = WhoIs(DISPLAY_CONTROLLER_NAME);
   tid_t train_controller = WhoIs(trains::TRAIN_CONTROLLER_NAME);
+  tid_t switch_task = WhoIs(trains::SWITCH_TASK_NAME);
 
   char message = static_cast<char>(trains::special_cmd::GO);
   char reply;
@@ -325,7 +326,40 @@ void initialize() {
     return;
   }
 
+  message = static_cast<char>(trains::special_cmd::RESET_MODE);
+  replylen = Send(train_controller, &message, 1, &reply, 1);
+  if (replylen != 1 || reply != static_cast<char>(trains::tc_reply::OK)) {
+    DEBUG_LITERAL("Could not send RESET MODE command\r\n");
+    return;
+  }
 
+  char speed_cmd_msg[1 + sizeof(trains::speed_cmd)];
+  speed_cmd_msg[0] = static_cast<char>(trains::tc_msg_header::SPEED);
+  trains::speed_cmd* scmd = (trains::speed_cmd*)(speed_cmd_msg+1);
+  scmd->speed = 16;
+
+  for (int train = 1; train <= 80; ++train) {
+    scmd->train = train;
+    Send(train_controller, speed_cmd_msg, 1 + sizeof(trains::speed_cmd), &reply, 1);
+    if (replylen != 1 || reply != static_cast<char>(trains::tc_reply::OK)) {
+      DEBUG_LITERAL("Could not send SPEED command\r\n");
+    }
+  }
+
+  char switch_cmd_msg[1 + sizeof(trains::switch_cmd)];
+  switch_cmd_msg[0] = static_cast<char>(display_msg_header::SWITCHES);
+  trains::switch_cmd* swcmd = (trains::switch_cmd*)(switch_cmd_msg+1);
+
+  for (size_t i = 0; i < num_solenoids; ++i) {
+    swcmd->switch_num = active_solenoids[i];
+    swcmd->switch_dir = trains::switch_dir_t::C;
+    replylen = Send(switch_task, (char*)swcmd, sizeof(trains::switch_cmd), &reply, 1);
+    if (replylen == 1 && reply == static_cast<char>(trains::tc_reply::OK)) {
+      Send(display_controller, switch_cmd_msg, 1 + sizeof(trains::switch_cmd), &reply, 1);
+    } else {
+      DEBUG_LITERAL("Could not send SWITCH command\r\n");
+    }
+  }
 }
 
 void init_tasks() {
@@ -333,6 +367,8 @@ void init_tasks() {
   Create(priority_t::PRIORITY_L1, command_controller_task);
   Create(priority_t::PRIORITY_L2, timer_task);
   Create(priority_t::PRIORITY_IDLE, idle_task);
+
+  Create(priority_t::PRIORITY_L1, initialize);
 }
 
 }
