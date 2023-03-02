@@ -43,6 +43,3 @@ enum class CLOCK_REPLY : char {
 };
 
 void clockserver();
-
-void tx_uartserver(char uart_channel);
-void rx_uartserver(char uart_channel);
