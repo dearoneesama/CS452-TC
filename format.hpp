@@ -705,7 +705,7 @@ namespace troll {
       return {"", size_type(0)};
     }
     Request &ref = queue_.front();
-    const char *content = ref.text ? ref.text : "\033[K";
+    const char *content = *ref.text ? ref.text : "\033[K";
     // output ansi code to relocate the cursor, and write text
     auto sz = snformat(current_text_, "\033[{};{}H{}", ref.line + 1, ref.column + 1, content);
     // at the end, locate the cursor to the bottom. if user wants to dodge the OutputControl

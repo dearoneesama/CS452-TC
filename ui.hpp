@@ -8,7 +8,9 @@ enum display_msg_header {
   IDLE_MSG = 'i',
   SENSOR_MSG = 'n',
   USER_INPUT = 'u',
-  STRING = 's',
+  USER_ENTER = 'e',
+  USER_BACKSPACE = 'b',
+  USER_NOTICE = 's',
   TIMER_CLOCK_MSG = 't',
   SWITCHES = 'w',
 };

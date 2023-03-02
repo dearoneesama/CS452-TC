@@ -16,69 +16,97 @@ const char active_solenoids[] = {
   0x9B, 0x9C }; // 155, 156
 
 void display_controller_task() {
+  using namespace troll;
+
   RegisterAs(DISPLAY_CONTROLLER_NAME);
   tid_t gtkterm_tx = WhoIs(gtkterm::GTK_TX_SERVER_NAME);
 
   tid_t request_tid;
-  const char* idle_format = "\0337\033[1;1H\033[KKernel: {}%  User: {}%  Idle: {}%\0338";
-  const char* timer_format = "\0337\033[2;1H\033[KTime: {}:{}:{}:{}\0338";
-  const char* sensor_format = "\0337\033[3;1H\033[KSensors: {}\0338";
-  const char* move_cursor_write_format = "\0337\033[{};{}H{}\0338";
 
-  const int offset_col = 16;
-  const int offset_per_index = 7;
-  const int offset_row = 4;
+  constexpr int user_row = 30;
+  OutputControl<150, user_row> takeover;
 
-  // xxx: (s|c|?)
-  const char *init_switch_table = "\0337\033[4;1H\033[KSwitches:   1: ?   2: ?   3: ?   4: ?   5: ?   6: ?   7: ?   8: ?   9: ?  10: ?" \
-                                           "\r\n           11: ?  12: ?  13: ?  14: ?  15: ?  16: ?  17: ?  18: ? 153: ? 154: ?" \
-                                           "\r\n          155: ? 156: ?\0338";
+  // headline
+  using title_style = static_ansi_style_options<
+    ansi_font::bold | ansi_font::italic, ansi_color::red, ansi_color::yellow
+  >;
+  auto title_str = sformat<50 + title_style::wrapper_str_size>(
+    "{}{}{}",
+    title_style::enabler_str(),
+    pad<50>("painful train program", padding::middle),
+    title_style::disabler_str()
+  );
+  takeover.enqueue(0, 0, title_str.data());
 
-  Puts(gtkterm_tx, 0, init_switch_table);
+  // switch table
+  constexpr size_t num_switches = 22;
+  int switch_table_titles[num_switches] = {
+    1, 2, 3, 4, 5, 6, 7, 8, 9, 10,
+    11, 12, 13, 14, 15, 16, 17, 18,
+    153, 154, 155, 156
+  };
+  const char *switch_table_values[num_switches] = {
+    "?", "?", "?", "?", "?", "?", "?", "?", "?", "?",
+    "?", "?", "?", "?", "?", "?", "?", "?",
+    "?", "?", "?", "?", 
+  };
+  auto switch_tab = make_tabulate<num_switches / 2, 9, 4>(
+    static_ansi_style_options_none,
+    tabulate_title_row_args{
+      "Switch", switch_table_titles, switch_table_titles + num_switches,
+      static_ansi_style_options<ansi_font::bold>{}, static_ansi_style_options_none
+    },
+    tabulate_elem_row_args{
+      "Dir", switch_table_values,
+      static_ansi_style_options<ansi_font::bold>{}, static_ansi_style_options_none
+    }
+  );
+  size_t row = 4;
+  for (auto sv : switch_tab) {
+    takeover.enqueue(row++, 0, sv.data());
+  }
+  size_t switch_end = row;
 
-  char buffer[128];
+  // notice
+  takeover.enqueue(user_row - 1, 0, "| ");
+  // user's input
+  size_t user_input_char_count = 0;
+  takeover.enqueue(user_row, 0, "> ");
+
   char message[128];
   const char* reply = "o";
 
   while (1) {
+    while (!takeover.empty()) {
+      auto sv = takeover.dequeue();
+      Puts(gtkterm_tx, 0, sv.data(), sv.size());
+    }
+
     int request = Receive((int*)&request_tid, message, 128);
 
     switch (static_cast<display_msg_header>(message[0])) {
-      case display_msg_header::IDLE_MSG : { // idle
-        time_percentage_t* percentages = (time_percentage_t*) (message+1);
-        auto len = troll::snformat(buffer, idle_format,
-          percentages->kernel,
-          percentages->user,
-          percentages->idle);
-        Puts(gtkterm_tx, 0, buffer, len);
-        Reply(request_tid, reply, 1);
-        break;
-      }
-      case display_msg_header::USER_INPUT: { // user input
-        Putc(gtkterm_tx, 0, message[1]);
-        Reply(request_tid, reply, 1);
-        break;
-      }
-      case display_msg_header::STRING: { // string
-        Puts(gtkterm_tx, 0, message + 1, request - 1);
-        Reply(request_tid, reply, 1);
-        break;
-      }
       case display_msg_header::TIMER_CLOCK_MSG: { // time
         timer_clock_t* time = (timer_clock_t*)(message + 1);
-        auto len = troll::snformat(buffer, timer_format,
+        auto str = sformat<50>(
+          "Uptime: {}:{}:{}:{}",
           time->hours,
           time->minutes,
           time->seconds,
-          time->hundred_ms);
-        Puts(gtkterm_tx, 0, buffer, len);
+          time->hundred_ms
+        );
+        takeover.enqueue(1, 0, str.data());
         Reply(request_tid, reply, 1);
         break;
       }
-      case display_msg_header::SENSOR_MSG: { // sensors
-        message[request] = '\0';
-        auto len = troll::snformat(buffer, sensor_format, message + 1);
-        Puts(gtkterm_tx, 0, buffer, len);
+      case display_msg_header::IDLE_MSG : { // idle
+        time_percentage_t* percentages = (time_percentage_t*) (message+1);
+        auto str = pad<50>(sformat<50>(
+          "Kernel: {}%  User: {}%  Idle: {}%",
+          percentages->kernel,
+          percentages->user,
+          percentages->idle
+        ), padding::left);
+        takeover.enqueue(2, 0, str.data());
         Reply(request_tid, reply, 1);
         break;
       }
@@ -86,26 +114,57 @@ void display_controller_task() {
         trains::switch_cmd* cmd = (trains::switch_cmd*) (message+1);
         const char *dir = cmd->switch_dir == trains::switch_dir_t::C ? "C" : "S";
         int switch_num = cmd->switch_num;
-        int row, col;
-        if (switch_num <= 10) {
-          // first row
-          row = offset_row;
-          col = offset_col + (switch_num - 1) * offset_per_index;
-        } else if (switch_num <= 154) {
-          // second row
-          row = offset_row + 1;
-          if (switch_num == 153 || switch_num == 154) {
-            col = offset_col + (switch_num - 153 + 8) * offset_per_index;
-          } else {
-            col = offset_col + (switch_num - 11) * offset_per_index;
-          }
-        } else {
-          // last row
-          row = offset_row + 2;
-          col = offset_col + (switch_num - 155) * offset_per_index;
+        int offset = switch_num <= 18 ? 1 : 135;
+        switch_table_values[switch_num - offset] = dir;
+        // redraw table
+        switch_tab.reset_src_iterator(
+          switch_table_titles,
+          switch_table_titles + num_switches,
+          switch_table_values
+        );
+        size_t row = 4;
+        for (auto sv : switch_tab) {
+          takeover.enqueue(row++, 0, sv.data());
         }
-        auto len = troll::snformat(buffer, move_cursor_write_format, row, col, dir);
-        Puts(gtkterm_tx, 0, buffer, len);
+        Reply(request_tid, reply, 1);
+        break;
+      }
+      case display_msg_header::SENSOR_MSG: { // sensors
+        message[request] = '\0';
+        using style = static_ansi_style_options<ansi_font::bold>;
+        auto str = sformat<sizeof message + style::wrapper_str_size + 10>(
+          "{}Sensors:{} {}",
+          style::enabler_str(),
+          style::disabler_str(),
+          message + 1
+        );
+        takeover.enqueue(switch_end + 1, 0, str.data());
+        Reply(request_tid, reply, 1);
+        break;
+      }
+      case display_msg_header::USER_INPUT: { // user input
+        message[2] = '\0';
+        takeover.enqueue(user_row, 2 + user_input_char_count, message + 1);
+        ++user_input_char_count;
+        Reply(request_tid, reply, 1);
+        break;
+      }
+      case display_msg_header::USER_BACKSPACE: { // user pressed backspace
+        --user_input_char_count;
+        takeover.enqueue(user_row, 2 + user_input_char_count, " ");
+        Reply(request_tid, reply, 1);
+        break;
+      }
+      case display_msg_header::USER_ENTER: { // user pressed enter
+        user_input_char_count = 0;
+        takeover.enqueue(user_row, 2, nullptr);
+        Reply(request_tid, reply, 1);
+        break;
+      }
+      case display_msg_header::USER_NOTICE: { // string
+        takeover.enqueue(user_row - 1, 2, nullptr);
+        message[request] = '\0';
+        takeover.enqueue(user_row - 1, 2, message + 1);
         Reply(request_tid, reply, 1);
         break;
       }
@@ -124,17 +183,10 @@ void command_controller_task() {
   tid_t switch_task = WhoIs(trains::SWITCH_TASK_NAME);
 
   char command_buffer[1 + 64];
-  command_buffer[0] = static_cast<char>(display_msg_header::STRING);
+  command_buffer[0] = static_cast<char>(display_msg_header::USER_NOTICE);
 
   size_t curr_size = 1;
-  char input_msg[2];
-  input_msg[0] = static_cast<char>(display_msg_header::USER_INPUT);
   char reply;
-
-  const char *history = "s\033[49;1H\033[K> ";
-  const char *clear_line = "s\033[50;1H\033[K> ";
-  const char *back_space = "s\033[1D\033[K";
-  Send(display_controller, clear_line, 13, &reply, 1);
 
   auto is_valid_train = [](int arg) {
     return 1 <= arg && arg <= 80;
@@ -164,7 +216,8 @@ void command_controller_task() {
   while (1) {
     char c = Getc(gtkterm_rx, 0);
     if (c == '\r') {
-      Send(display_controller, history, 13, &reply, 1);
+      char enter_msg = static_cast<char>(display_msg_header::USER_ENTER);
+      Send(display_controller, &enter_msg, 1, &reply, 1);
       Send(display_controller, command_buffer, curr_size, &reply, 1);
 
       int arg1 = 0, arg2 = 0;
@@ -214,15 +267,20 @@ void command_controller_task() {
       }
 
       if (!valid) {
-        Send(display_controller, "s Invalid!", 10, &reply, 1);
+        troll::snformat(command_buffer + curr_size, sizeof command_buffer - curr_size, " is invalid!");
+        Send(display_controller, command_buffer, curr_size + 13, &reply, 1);
       }
-      Send(display_controller, clear_line, 13, &reply, 1);
       curr_size = 1;
+
     } else if (c == 8 && curr_size > 1) { // back space
       curr_size--;
-      Send(display_controller, back_space, 8, &reply, 1);
+      char bs_msg = static_cast<char>(display_msg_header::USER_BACKSPACE);
+      Send(display_controller, &bs_msg, 1, &reply, 1);
+
     } else if (curr_size < 65) {
       command_buffer[curr_size++] = c;
+      char input_msg[2];
+      input_msg[0] = static_cast<char>(display_msg_header::USER_INPUT);
       input_msg[1] = c;
       Send(display_controller, input_msg, 2, &reply, 1);
     }
