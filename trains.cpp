@@ -108,9 +108,9 @@ public:
       char sensor_module = modules_.most_recent_at(i);
       char sensor_contact = contacts_.most_recent_at(i);
       *(message++) = sensor_module;
-      *(message++) = '.';
       *(message++) = '0' + (sensor_contact >= 10 ? 1 : 0);
       *(message++) = '0' + (sensor_contact % 10);
+      *(message++) = ' ';
     }
     return 4 * num_sensors;
   }

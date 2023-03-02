@@ -11,8 +11,8 @@ void merklin_rxnotifer() {
   char reply;
   char msg = 'n';
   while (1) {
-    Send(server, &msg, 1, &reply, 1);
     AwaitEvent(events_t::UART_R1);
+    Send(server, &msg, 1, &reply, 1);
   }
 }
 
@@ -47,12 +47,18 @@ void merklin_rxserver() {
   etl::queue<char, 10> char_queue;
   etl::queue<tid_t, 10> requester_queue;
   const char* reply = "o";
+  // bool is_first_notifier_msg = true;
 
   while (1) {
     int request = Receive((int*)&request_tid, message, 1);
     if (request <= 0) continue;
     switch (message[0]) {
       case 'n': { // notifier
+        // if (is_first_notifier_msg) {
+        //   Reply(notifier, reply, 1);
+        //   is_first_notifier_msg = false;
+        //   break;
+        // }
         char_queue.push(UartReadRegister(1, rpi::UART_RHR));
         Reply(notifier, reply, 1);
         if (!requester_queue.empty()) {
