@@ -335,17 +335,40 @@ extern "C" void *memset(void *s, int c, size_t n) {
 
 // define our own memcpy to avoid SIMD instructions emitted from the compiler
 extern "C" void* memcpy(void* __restrict__ dest, const void* __restrict__ src, size_t n) {
+  char* cdest = (char*)dest;
+  char* csrc = (char*)src;
   uint64_t* u64dest = (uint64_t*)dest;
   uint64_t* u64src = (uint64_t*)src;
 
+  // do not do block copy in these conditions
+  auto dest_mod = (uintptr_t)dest & 7;
+  auto src_mod = (uintptr_t)src & 7;
+  if (
+    n < 8  // too small
+    || (n < 64 && (dest_mod || src_mod)) // not aligned, but still too small to worth it
+    || (dest_mod && dest_mod == src_mod) // never aligns
+  ) {
+    while (n--) *(cdest++) = *(csrc++);
+    return dest;
+  }
+
+  // try to align
+  while (((uintptr_t)cdest & 7 || (uintptr_t)csrc & 7) && n) {
+    *(cdest++) = *(csrc++);
+    --n;
+  }
+  if (!n) return dest;
+
+  u64dest = (uint64_t*)cdest;
+  u64src = (uint64_t*)csrc;
   // this is because ARMv8 registers are 64bit or 8bytes
   while (n >= 8) {
     *(u64dest++) = *(u64src++);
     n -= 8;
   }
 
-  char* csrc = (char*)u64src;
-  char* cdest = (char*)u64dest;
+  cdest = (char*)u64dest;
+  csrc = (char*)u64src;
   while (n--) *(cdest++) = *(csrc++);
   return dest;
 }
