@@ -41,6 +41,9 @@ namespace troll {
         if constexpr (std::is_pointer_v<Decay> && std::is_same_v<std::remove_const_t<std::remove_pointer_t<Decay>>, char>) {
           // const char * <- to_string will print numbers instead
           s.assign(a0);
+        } else if constexpr (std::is_same_v<Decay, char>) {
+          // print char instead of number
+          s.assign(1, a0);
         } else if constexpr (is_etl_string<Decay>::value) {
           // etl::to_string does not support etl::string arg
           s.assign(a0);

@@ -45,10 +45,10 @@ void display_controller_task() {
     11, 12, 13, 14, 15, 16, 17, 18,
     153, 154, 155, 156
   };
-  const char *switch_table_values[num_switches] = {
-    "?", "?", "?", "?", "?", "?", "?", "?", "?", "?",
-    "?", "?", "?", "?", "?", "?", "?", "?",
-    "?", "?", "?", "?", 
+  char switch_table_values[num_switches] = {
+    '?', '?', '?', '?', '?', '?', '?', '?', '?', '?',
+    '?', '?', '?', '?', '?', '?', '?', '?',
+    '?', '?', '?', '?', 
   };
   auto switch_tab = make_tabulate<num_switches / 2, 9, 4>(
     static_ansi_style_options_none,
@@ -112,7 +112,7 @@ void display_controller_task() {
       }
       case display_msg_header::SWITCHES: { // we assume that only changing active switches will go through here
         trains::switch_cmd* cmd = (trains::switch_cmd*) (message+1);
-        const char *dir = cmd->switch_dir == trains::switch_dir_t::C ? "C" : "S";
+        char dir = cmd->switch_dir == trains::switch_dir_t::C ? 'C' : 'S';
         int switch_num = cmd->switch_num;
         int offset = switch_num <= 18 ? 1 : 135;
         switch_table_values[switch_num - offset] = dir;
