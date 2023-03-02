@@ -158,6 +158,9 @@ int main() {
         task_manager.kp_dcache(current_task);
         break;
       }
+      case SYSCALLN_TERMINATE: {
+        return 0;
+      }
       default: {
         // in case the kernel does not recognize the request, print it and return
         uart_puts(0, 0, "Got request: ", 13);

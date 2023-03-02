@@ -221,6 +221,8 @@ void command_controller_task() {
             }
           }
         }
+      } else if (curr_size == 2 && command_buffer[1] == 'q') {
+        Terminate();
       }
 
       if (!valid) {

@@ -96,3 +96,8 @@ UartReadRegister:
     svc SYSCALLN_UARTREAD
     ret
 
+.global Terminate
+.balign 16
+Terminate:
+    svc SYSCALLN_TERMINATE
+    ret

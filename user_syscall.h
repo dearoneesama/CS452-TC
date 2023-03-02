@@ -7,6 +7,7 @@ extern "C" int MyParentTid();
 extern "C" void Yield();
 extern "C" void Exit();
 extern "C" int AwaitEvent(int eventid);
+extern "C" void Terminate();
 
 // message passing
 extern "C" int Send(int tid, const char* msg, int msglen, char* reply, int rplen);

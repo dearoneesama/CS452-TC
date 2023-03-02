@@ -16,4 +16,5 @@
 #define SYSCALLN_UARTWRITE        14
 #define SYSCALLN_UARTREAD         15
 #define SYSCALLN_EXIT             16
-#define SYSCALLN_INVALID			    (SYSCALLN_EXIT + 1)
+#define SYSCALLN_TERMINATE        17
+#define SYSCALLN_INVALID			    (SYSCALLN_TERMINATE + 1)
