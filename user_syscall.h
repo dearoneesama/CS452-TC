@@ -35,5 +35,7 @@ extern "C" void TimeDistribution(time_distribution_t* time_distribution);
 extern "C" void SaveThePlanet();
 
 // uart
+extern "C" int UartWriteRegister(int channel, char reg, char data);
+extern "C" int UartReadRegister(int channel, char reg);
 int Getc(int tid, int channel);
 int Putc(int tid, int channel, char c);

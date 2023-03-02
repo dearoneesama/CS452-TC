@@ -115,6 +115,14 @@ int main() {
         task_manager.ready_push(current_task);
         break;
       }
+      case SYSCALLN_UARTREAD: {
+        task_manager.k_uart_read(current_task);
+        break;
+      }
+      case SYSCALLN_UARTWRITE: {
+        task_manager.k_uart_write(current_task);
+        break;
+      }
       case SYSCALLN_SAVETHEPLANET: {
         // note: only the idle task should call this
         // also note that userspace is not able to call wfi

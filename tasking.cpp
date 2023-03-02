@@ -190,6 +190,11 @@ void task_manager::k_reply(task_descriptor *curr_task) {
 
 void task_manager::k_await_event(task_descriptor *curr_task, gpio::uart_interrupt_state& state) {
   events_t event_id = (events_t) (curr_task->context.registers[0]);
+  // if (missed_event_queues[event_id] != 0) {
+  //   curr_task->context.registers[0] = missed_event_queues[event_id];
+  //   missed_event_queues[event_id] = 0;
+  //   ready_push(curr_task);
+  // }
   if (event_id < MAX_NUM_EVENTS) {
     event_queues[event_id].push(*curr_task);
     switch (event_id) {
@@ -209,6 +214,10 @@ void task_manager::k_await_event(task_descriptor *curr_task, gpio::uart_interrup
         state.enable_tx(1);
         break;
       }
+      case events_t::CTS_1: {
+        // this should always be enabled
+        break;
+      }
       default:
         break;
     }
@@ -222,12 +231,30 @@ void task_manager::wake_up_tasks_on_event(events_t event_id, int return_value) {
   auto& event_queue = event_queues[event_id];
   if (!event_queue.size()) {
     DEBUG_LITERAL("[kernel] no task is waiting on event!\r\n");
+    // missed_event_queues[event_id] = return_value;
   }
   while (event_queue.size()) {
     auto& task = event_queue.pop();
     task.context.registers[0] = return_value;
     ready_push(&task);
   }
+}
+
+void task_manager::k_uart_read(task_descriptor *curr_task) {
+  int uart_channel = curr_task->context.registers[0];
+  char reg = curr_task->context.registers[1];
+  char data = uart_read_register(0, uart_channel, reg);
+  curr_task->context.registers[0] = data;
+  ready_push(curr_task);
+}
+
+void task_manager::k_uart_write(task_descriptor *curr_task) {
+  int uart_channel = curr_task->context.registers[0];
+  char reg = curr_task->context.registers[1];
+  char data = curr_task->context.registers[2];
+  uart_write_register(0, uart_channel, reg, data);
+  curr_task->context.registers[0] = 0;
+  ready_push(curr_task);
 }
 
 void task_manager::kp_dcache(task_descriptor *curr_task) {

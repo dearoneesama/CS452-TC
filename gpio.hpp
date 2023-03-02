@@ -10,6 +10,8 @@ public:
   void disable_tx(size_t uart_channel);
   void enable_rx(size_t uart_channel);
   void enable_tx(size_t uart_channel);
+  void enable_modem_interrupt();
+  void disable_modem_interrupt();
   char &get_ier(size_t uart_channel);
 private:
   char ier0 = 0;

@@ -61,6 +61,8 @@ namespace kernel {
     void k_reply(task_descriptor *curr_task);
     void k_await_event(task_descriptor *curr_task, gpio::uart_interrupt_state& state);
     void k_exit(task_descriptor *curr_task);
+    void k_uart_write(task_descriptor *curr_task);
+    void k_uart_read(task_descriptor *curr_task);
 
     void wake_up_tasks_on_event(events_t event_id, int return_value);
 
@@ -83,5 +85,6 @@ namespace kernel {
     troll::queue<task_descriptor> mailboxes[MAX_NUM_TASKS];
     // event queues
     troll::queue<task_descriptor> event_queues[MAX_NUM_EVENTS];
+    // char missed_event_queues[MAX_NUM_EVENTS] = {0};
   };
 }  // namespace kernel

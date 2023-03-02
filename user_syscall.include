@@ -13,5 +13,7 @@
 #define SYSBENCHMARK_BCACHE       11
 #define SYSCALLN_SAVETHEPLANET    12
 #define SYSCALLN_TIMEDISTRIBUTION 13
-#define SYSCALLN_EXIT             14
+#define SYSCALLN_UARTWRITE        14
+#define SYSCALLN_UARTREAD         15
+#define SYSCALLN_EXIT             16
 #define SYSCALLN_INVALID			    (SYSCALLN_EXIT + 1)

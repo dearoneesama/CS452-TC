@@ -83,3 +83,16 @@ SaveThePlanet:
 TimeDistribution:
     svc SYSCALLN_TIMEDISTRIBUTION
     ret
+
+.global UartWriteRegister
+.balign 16
+UartWriteRegister:
+    svc SYSCALLN_UARTWRITE
+    ret
+
+.global UartReadRegister
+.balign 16
+UartReadRegister:
+    svc SYSCALLN_UARTREAD
+    ret
+

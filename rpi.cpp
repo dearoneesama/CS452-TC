@@ -206,6 +206,7 @@ static const char UART_FCR_RX_FIFO_RESET       = 0x02;
 static const char UART_FCR_FIFO_EN             = 0x01;
 static const char UART_LCR_DIV_LATCH_EN        = 0x80;
 static const char UART_EFR_ENABLE_ENHANCED_FNS = 0x10;
+static const char UART_AUTO_CTS                = (1 << 7);
 static const char UART_IOControl_RESET         = 0x08;
 
 void uart_write_register(size_t spiChannel, size_t uartChannel, char reg, char data) {
@@ -231,13 +232,20 @@ static void uart_init_channel(size_t spiChannel, size_t uartChannel, size_t baud
   uart_write_register(spiChannel, uartChannel, UART_DLL, (bauddiv & 0x00FF));
 
   bool is_channel_0 = uartChannel == 0;
+  uart_write_register(spiChannel, uartChannel, UART_LCR, 0xbf);
+  if (is_channel_0) {
+    uart_write_register(spiChannel, uartChannel, UART_EFR, UART_EFR_ENABLE_ENHANCED_FNS);
+  } else {
+    uart_write_register(spiChannel, uartChannel, UART_EFR, UART_AUTO_CTS);
+  }
+
   char lcr_data = is_channel_0 ? 0x3 : 0x7;
-    // set serial byte configuration: 8 bit, no parity, 1 stop bit
+  // set serial byte configuration: 8 bit, no parity, 1 stop bit
   uart_write_register(spiChannel, uartChannel, UART_LCR, lcr_data);
 
   char fcr_data = UART_FCR_RX_FIFO_RESET | UART_FCR_TX_FIFO_RESET;
   if (is_channel_0) {
-    uart_write_register(spiChannel, uartChannel, UART_EFR, UART_EFR_ENABLE_ENHANCED_FNS);
+    // uart_write_register(spiChannel, uartChannel, UART_EFR, UART_EFR_ENABLE_ENHANCED_FNS);
     fcr_data |= UART_FCR_FIFO_EN;
   }
   // clear and enable fifos, (wait since clearing fifos takes time)

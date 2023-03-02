@@ -44,7 +44,9 @@ void handle_gpio_interrupt(
   case gpio::GPIO_IRQ_TYPE::MODEM_STATUS: {
     // only relevant for keeping track of cts for merklin
     if (!is_channel_0) {
-      the_task_manager.wake_up_tasks_on_event(events_t::CTS_1, 1);
+      // read the modem status
+      the_task_manager.wake_up_tasks_on_event(events_t::CTS_1, uart_read_register(0, 1, rpi::UART_MSR));
+      // uart_irq_state.disable_modem_interrupt();
     }
     break;
   }
