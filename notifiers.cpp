@@ -1,6 +1,6 @@
 #include "notifiers.hpp"
 #include "rpi.hpp"
-#include "user_syscall.h"
+#include "user_syscall_typed.hpp"
 #include "servers.hpp"
 
 void clocknotifier() {
@@ -11,14 +11,12 @@ void clocknotifier() {
     return;
   }
 
-  char reply;
-  int value;
-  char notify_message = static_cast<char>(CLOCK_MESSAGE::NOTIFY);
   while (1) {
-    value = AwaitEvent(static_cast<char>(events_t::TIMER));
+    int value = AwaitEvent(static_cast<char>(events_t::TIMER));
     if (value == 1) {
-      value = Send(clock_server_tid, &notify_message, 1, &reply, 1);
-      if (value == 1 && reply == static_cast<char>(CLOCK_REPLY::NOTIFY_OK)) {
+      CLOCK_REPLY reply;
+      value = SendValue(clock_server_tid, CLOCK_MESSAGE::NOTIFY, reply);
+      if (value == 1 && reply == CLOCK_REPLY::NOTIFY_OK) {
         continue;
       } else {
         // something went wrong if we got here...

@@ -1,7 +1,7 @@
 #include "user.hpp"
 
 #include "rpi.hpp"
-#include "user_syscall.h"
+#include "user_syscall_typed.hpp"
 #include "format.hpp"
 #include "servers.hpp"
 #include "notifiers.hpp"
@@ -120,7 +120,7 @@ void test_user_task() {
   }
 }
 
-etl::string_view message_to_rps(char m) {
+etl::string_view message_to_rps(RPS_MESSAGE m) {
   switch (static_cast<RPS_MESSAGE>(m)) {
     case RPS_MESSAGE::PAPER:
       return "paper";
@@ -140,27 +140,27 @@ etl::string_view message_to_rps(char m) {
 void rps_other_user_task(RPS_MESSAGE *actions) {
   auto rps_server = WhoIs("rpsserver");
   auto tid = MyTid();
-  char reply;
+  RPS_REPLY reply;
   do {
-    auto message = static_cast<char>(RPS_MESSAGE::SIGNUP);
-    Send(rps_server, &message, 1, &reply, 1);
+    auto message = RPS_MESSAGE::SIGNUP;
+    SendValue(rps_server, message, reply);
 
     for (size_t i = 0; i < 2; ++i) {
       if (actions) {
-        message = static_cast<char>(actions[i]);
+        message = actions[i];
       } else {
         if (GET_TIMER_COUNT() % 10 == 7) {  // "random" quit
-          message = static_cast<char>(RPS_MESSAGE::QUIT);
+          message = RPS_MESSAGE::QUIT;
         } else {
-          message = GET_TIMER_COUNT() % 3;  // "random" action
+          message = static_cast<RPS_MESSAGE>(GET_TIMER_COUNT() % 3);  // "random" action
         }
       }
-      Send(rps_server, &message, 1, &reply, 1);
+      SendValue(rps_server, message, reply);
 
       char buf[100];
       size_t len = troll::snformat(buf, "[{}, {}] ", tid, message_to_rps(message));
 
-      switch (static_cast<RPS_REPLY>(reply)) {
+      switch (reply) {
         case RPS_REPLY::ABANDONED:
           len += troll::snformat(buf + len, sizeof buf - len, "Match abandoned.\r\n", tid);
           uart_puts(0, 0, buf, len);
@@ -182,8 +182,8 @@ void rps_other_user_task(RPS_MESSAGE *actions) {
         uart_getc(0, 0);  // block if random play
       }
     }
-    message = static_cast<char>(RPS_MESSAGE::QUIT);
-    Send(rps_server, &message, 1, &reply, 1);
+    message = RPS_MESSAGE::QUIT;
+    SendValue(rps_server, message, reply);
   loop:
     (void)0;
   } while (!actions);
@@ -240,8 +240,8 @@ void perf_receiver() {
   char buffer[256];
   tid_t tid;
   while (1) {
-    auto len = Receive(reinterpret_cast<int *>(&tid), buffer, sizeof buffer);
-    Reply(tid, buffer, len);
+    auto len = ReceiveValue(tid, buffer);
+    ReplyValue(tid, buffer, len);
   }
   // receiver task will starve: THIS is intentional to make things simpler
 }
@@ -285,7 +285,7 @@ void perf_task() {
         auto size = sizes[sz_i];
         start_tick = GET_TIMER_COUNT();
         for (size_t i = 0; i < PERF_REPEAT; ++i) {
-          Send(target_tid, send_buf, size, recv_buf, size);
+          SendValue(target_tid, send_buf, size, recv_buf, size);
         }
         auto ms_per = (GET_TIMER_COUNT() - start_tick) / PERF_REPEAT * NUM_TICKS_IN_1US;
         // {nocache|icache|dcache|bcache} {R|S} {4|64|256} {time}
@@ -363,7 +363,7 @@ void clock_client() {
   tid_t tid = MyTid();
 
   char buffer[2];
-  int replylen = Send(ptid, "c", 1, buffer, 2);
+  int replylen = SendValue(ptid, 'c', buffer);
   if (replylen != 2) {
     DEBUG_LITERAL("Something went wrong in clock client\r\n");
     return;
@@ -412,7 +412,7 @@ void first_user_task() {
     if (msg == 'c') {
       for (int j = 0; j < 4; ++j) {
         if (clock_clients[j] == client_tid) {
-          Reply(client_tid, responses[j], 2);
+          ReplyValue(client_tid, responses[j]);
           break;
         }
       }

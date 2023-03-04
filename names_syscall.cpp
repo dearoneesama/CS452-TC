@@ -1,4 +1,4 @@
-#include "user_syscall.h"
+#include "user_syscall_typed.hpp"
 
 int RegisterAs(const char* name) {
   if (!name) {
@@ -13,7 +13,7 @@ int RegisterAs(const char* name) {
   }
   request_buffer[request_length++] = '\0';
   char reply_buffer[1];
-  int reply_len = Send(3, request_buffer, request_length, reply_buffer, 1);
+  int reply_len = SendValue(3, request_buffer, request_length, reply_buffer);
   if (reply_len == 1 && reply_buffer[0] == '1') {
     return 0;
   }
@@ -36,7 +36,7 @@ int WhoIs(const char* name) {
   }
   request_buffer[request_length++] = '\0';
   char reply_buffer[4];
-  int reply_len = Send(3, request_buffer, request_length, reply_buffer, 4);
+  int reply_len = SendValue(3, request_buffer, request_length, reply_buffer);
   if (reply_len < 0) {
     return -1;
   }

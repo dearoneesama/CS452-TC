@@ -1,6 +1,6 @@
 #include "gtkterm.hpp"
 #include "kstddefs.hpp"
-#include "user_syscall.h"
+#include "user_syscall_typed.hpp"
 #include "rpi.hpp"
 #include <etl/queue.h>
 
@@ -8,20 +8,16 @@ namespace gtkterm {
 
 void gtkterm_rxnotifier() {
   tid_t server = MyParentTid();
-  char reply;
-  char msg = 'n';
   while (1) {
-    Send(server, &msg, 1, &reply, 1);
+    SendValue(server, 'n', null_reply);
     AwaitEvent(events_t::UART_R0);
   }
 }
 
 void gtkterm_txnotifier() {
   tid_t server = MyParentTid();
-  char reply;
-  char msg = 'n';
   while (1) {
-    Send(server, &msg, 1, &reply, 1);
+    SendValue(server, 'n', null_reply);
     AwaitEvent(events_t::UART_T0);
   }
 }
@@ -35,11 +31,11 @@ void gtkterm_rxserver() {
   char message[1];
   etl::queue<tid_t, 50> requester_queue;
   etl::queue<char, MAX_QUEUED_CHARS> char_queue;
-  const char* reply = "o";
+  char reply = 'o';
   bool notifier_is_parked = false;
 
   while (1) {
-    int request = Receive((int*)&request_tid, message, 1);
+    int request = ReceiveValue(request_tid, message);
     if (request <= 0) continue;
 
     switch (message[0]) {
@@ -50,27 +46,27 @@ void gtkterm_rxserver() {
           --rxlvl;
         }
         while (!requester_queue.empty() && !char_queue.empty()) {
-          Reply(requester_queue.front(), &(char_queue.front()), 1);
+          ReplyValue(requester_queue.front(), char_queue.front());
           requester_queue.pop();
           char_queue.pop();
         }
         if (requester_queue.empty()) {
           notifier_is_parked = true;
         } else {
-          Reply(notifier, reply, 1);
+          ReplyValue(notifier, reply);
         }
         break;
       }
       case 'g': { // getc
         requester_queue.push(request_tid);
         while (!requester_queue.empty() && !char_queue.empty()) {
-          Reply(requester_queue.front(), &(char_queue.front()), 1);
+          ReplyValue(requester_queue.front(), char_queue.front());
           requester_queue.pop();
           char_queue.pop();
         }
         if (!requester_queue.empty() && notifier_is_parked) {
           notifier_is_parked = false;
-          Reply(notifier, reply, 1);
+          ReplyValue(notifier, reply);
         }
       }
       default: break;
@@ -84,12 +80,12 @@ void gtkterm_txserver() {
   tid_t request_tid;
   char message[2];
   etl::queue<char, MAX_QUEUED_CHARS> char_queue;
-  const char* reply = "o";
+  char reply = 'o';
   char c;
   bool notifier_is_parked = false;
 
   while (1) {
-    int request = Receive((int*)&request_tid, message, 2);
+    int request = ReceiveValue(request_tid, message);
     if (request <= 0) continue;
 
     switch (message[0]) {
@@ -107,7 +103,7 @@ void gtkterm_txserver() {
         }
         if (!char_queue.empty()) {
           notifier_is_parked = false;
-          Reply(notifier, reply, 1);
+          ReplyValue(notifier, reply);
         } else {
           notifier_is_parked = true;
         }
@@ -115,7 +111,7 @@ void gtkterm_txserver() {
       }
       case 'p': { // putc
         char_queue.push(message[1]);
-        Reply(request_tid, reply, 1);
+        ReplyValue(request_tid, reply);
         int txlvl = UartReadRegister(0, rpi::UART_TXLVL);
         while (!char_queue.empty() && txlvl != 0) {
           c = char_queue.front();
@@ -125,7 +121,7 @@ void gtkterm_txserver() {
         }
         if (!char_queue.empty() && notifier_is_parked) {
           notifier_is_parked = false;
-          Reply(notifier, reply, 1);
+          ReplyValue(notifier, reply);
         }
         break;
       }

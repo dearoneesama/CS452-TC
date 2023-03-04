@@ -1,16 +1,16 @@
-#include "user_syscall.h"
+#include "user_syscall_typed.hpp"
 
 int Getc(int tid, int) {
   char message = 'g';
   char reply;
-  Send(tid, &message, 1, &reply, 1);
+  SendValue(tid, message, reply);
   return reply;
 }
 
 int Putc(int tid, int, char c) {
   char message[2] = { 'p', c };
   char reply;
-  Send(tid, message, 2, &reply, 1);
+  SendValue(tid, message, reply);
   if (reply == 'o') {
     return 0;
   }

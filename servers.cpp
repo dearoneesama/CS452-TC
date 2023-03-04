@@ -3,7 +3,7 @@
 #include "servers.hpp"
 #include "kstddefs.hpp"
 #include "utils.hpp"
-#include "user_syscall.h"
+#include "user_syscall_typed.hpp"
 #include "rpi.hpp"
 #include "notifiers.hpp"
 
@@ -17,12 +17,12 @@ void nameserver() {
   while (1) {
     // received string is guaranteed to be null-terminated if client
     // uses Register() or WhoIs()
-    int request = Receive((int*)&request_tid, buffer, sizeof buffer);
+    int request = ReceiveValue(request_tid, buffer);
     if (request > 0) {
       switch (buffer[0]) {
       case 'r': { // register
         lookup[buffer + 1] = request_tid;
-        Reply(request_tid, "1", 1);
+        ReplyValue(request_tid, '1');
         break;
       }
       case 'w': { // who is
@@ -32,9 +32,9 @@ void nameserver() {
           tid_buffer[1] = target_tid >> 8;
           tid_buffer[2] = target_tid >> 16;
           tid_buffer[3] = target_tid >> 24;
-          Reply(request_tid, tid_buffer, 4);
+          ReplyValue(request_tid, tid_buffer);
         } else {
-          Reply(request_tid, 0, 0); // no such name
+          ReplyValue(request_tid, null_reply); // no such name
         }
         break;
       }
@@ -58,11 +58,6 @@ namespace {
       return -1;
     }
     return 1;
-  }
-
-  void rps_reply(tid_t tid, RPS_REPLY r) {
-    auto buf = static_cast<char>(r);
-    Reply(tid, &buf, sizeof buf);
   }
 }  // namespace
 
@@ -90,19 +85,19 @@ void rpsserver() {
       queue.pop();
       matches[p0] = {p1, RPS_MESSAGE::SIGNUP};
       matches[p1] = {p0, RPS_MESSAGE::SIGNUP};
-      rps_reply(p0, RPS_REPLY::SEND_ACTION);
-      rps_reply(p1, RPS_REPLY::SEND_ACTION);
+      ReplyValue(p0, RPS_REPLY::SEND_ACTION);
+      ReplyValue(p1, RPS_REPLY::SEND_ACTION);
       continue;
     }
 
-    if (Receive(reinterpret_cast<int *>(&request_tid), &message, sizeof message) < 1) {
+    if (ReceiveValue(request_tid, message) < 1) {
       continue;
     }
     switch (auto act = static_cast<RPS_MESSAGE>(message)) {
     case RPS_MESSAGE::SIGNUP: {
       // ignore double signup after a match
       if (matches.find(request_tid) != matches.cend()) {
-        rps_reply(request_tid, RPS_REPLY::INVALID);
+        ReplyValue(request_tid, RPS_REPLY::INVALID);
       } else {
         queue.push(request_tid);  // client is blocked
       }
@@ -117,7 +112,7 @@ void rpsserver() {
         // (other play quits). in this case send abandon too.
         // technically it gets mixed up if another client sends play without signing
         // up and this if cond is hit. but this reply is ok too and that's user error
-        rps_reply(request_tid, RPS_REPLY::ABANDONED);
+        ReplyValue(request_tid, RPS_REPLY::ABANDONED);
       } else {
         found->second.which = act;  // client is blocked
       }
@@ -127,13 +122,13 @@ void rpsserver() {
     case RPS_MESSAGE::QUIT: {
       if (auto found = matches.find(request_tid); found == matches.cend()) {
         // other opponent quit already or request is troll
-        rps_reply(request_tid, RPS_REPLY::ABANDONED);
+        ReplyValue(request_tid, RPS_REPLY::ABANDONED);
       } else {
         auto opponent_tid = found->second.opponent;
-        rps_reply(request_tid, RPS_REPLY::ABANDONED);
+        ReplyValue(request_tid, RPS_REPLY::ABANDONED);
         if (auto opponent = matches[opponent_tid]; opponent.which != RPS_MESSAGE::SIGNUP) {
           // other play has sent a command already. reply to it as well.
-          rps_reply(opponent_tid, RPS_REPLY::ABANDONED);
+          ReplyValue(opponent_tid, RPS_REPLY::ABANDONED);
         }
         matches.erase(request_tid);
         matches.erase(opponent_tid);
@@ -159,8 +154,8 @@ void rpsserver() {
       } else {
         reply0 = reply1 = RPS_REPLY::TIE_AND_SEND_ACTION;
       }
-      rps_reply(tid, reply0);
-      rps_reply(match.opponent, reply1);
+      ReplyValue(tid, reply0);
+      ReplyValue(match.opponent, reply1);
       match.which = opponent.which = RPS_MESSAGE::SIGNUP;
     }
   }
@@ -181,13 +176,13 @@ void clockserver() {
 
   tid_t request_tid;
   while (1) {
-    int request = Receive((int*)&request_tid, buffer, buffer_length);
+    int request = ReceiveValue(request_tid, buffer);
     if (request <= 0) continue;
     switch (static_cast<CLOCK_MESSAGE>(buffer[0])) {
       case CLOCK_MESSAGE::TIME: {
         buffer[0] = static_cast<char>(CLOCK_REPLY::TIME_OK);
         utils::uint32_to_buffer(buffer + 1, ticks_in_10ms);
-        Reply(request_tid, buffer, 5);
+        ReplyValue(request_tid, buffer);
         break;
       }
       case CLOCK_MESSAGE::DELAY: {
@@ -197,7 +192,7 @@ void clockserver() {
         } else {
           buffer[0] = static_cast<char>(CLOCK_REPLY::DELAY_OK);
           utils::uint32_to_buffer(buffer + 1, ticks_in_10ms);
-          Reply(request_tid, buffer, 5);
+          ReplyValue(request_tid, buffer);
         }
         break;
       }
@@ -209,17 +204,17 @@ void clockserver() {
         } else if (delay == 0) {
           buffer[0] = static_cast<char>(CLOCK_REPLY::DELAY_OK);
           utils::uint32_to_buffer(buffer + 1, ticks_in_10ms);
-          Reply(request_tid, buffer, 5);
+          ReplyValue(request_tid, buffer);
         } else {
           buffer[0] = static_cast<char>(CLOCK_REPLY::DELAY_NEGATIVE);
-          Reply(request_tid, buffer, 1);
+          ReplyValue(request_tid, buffer, 1);
         }
         break;
       }
       case CLOCK_MESSAGE::NOTIFY: {
         ++ticks_in_10ms;
         buffer[0] = static_cast<char>(CLOCK_REPLY::NOTIFY_OK);
-        Reply(request_tid, buffer, 1);
+        ReplyValue(request_tid, buffer, 1);
 
         buffer[0] = static_cast<char>(CLOCK_REPLY::DELAY_OK);
         utils::uint32_to_buffer(buffer + 1, ticks_in_10ms);
@@ -232,7 +227,7 @@ void clockserver() {
           }
           delays[tid] -= 1;
           if (delays[tid] == 0) {
-            Reply(tid, buffer, 5);
+            ReplyValue(tid, buffer);
           }
         }
         break;

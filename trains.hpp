@@ -2,13 +2,13 @@
 
 namespace trains {
 
-enum tc_reply {
+enum class tc_reply : char {
   OK = 0,
   TRAIN_ALREADY_REVERSING,
   SWITCH_UNCHANGED,
 };
 
-enum tc_msg_header {
+enum class tc_msg_header : char {
   SPEED = 'd',
 
   REVERSE_CMD_PART_1 = 'r', // makes the train stop
@@ -29,13 +29,13 @@ struct reverse_cmd {
   int train;
 };
 
-enum switch_dir_t {
+enum class switch_dir_t : char {
   S = 0x21,
   C = 0x22,
   NONE = 0,
 };
 
-enum special_cmd {
+enum class special_cmd : char {
   TURNOFF_SWITCH = 0x20,
   RESET_MODE = 0xC0,
   READ_SENSORS = 128 + 5,

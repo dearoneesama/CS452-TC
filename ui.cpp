@@ -1,6 +1,6 @@
 #include "ui.hpp"
 #include "gtkterm.hpp"
-#include "user_syscall.h"
+#include "user_syscall_typed.hpp"
 #include "kstddefs.hpp"
 #include "format.hpp"
 #include "trains.hpp"
@@ -74,7 +74,7 @@ void display_controller_task() {
   takeover.enqueue(user_row, 0, "> ");
 
   char message[128];
-  const char* reply = "o";
+  const char reply = 'o';
 
   while (1) {
     while (!takeover.empty()) {
@@ -82,7 +82,7 @@ void display_controller_task() {
       Puts(gtkterm_tx, 0, sv.data(), sv.size());
     }
 
-    int request = Receive((int*)&request_tid, message, 128);
+    int request = ReceiveValue(request_tid, message);
 
     switch (static_cast<display_msg_header>(message[0])) {
       case display_msg_header::TIMER_CLOCK_MSG: { // time
@@ -95,7 +95,7 @@ void display_controller_task() {
           time->hundred_ms
         );
         takeover.enqueue(1, 0, str.data());
-        Reply(request_tid, reply, 1);
+        ReplyValue(request_tid, reply);
         break;
       }
       case display_msg_header::IDLE_MSG : { // idle
@@ -107,7 +107,7 @@ void display_controller_task() {
           percentages->idle
         ), padding::left);
         takeover.enqueue(2, 0, str.data());
-        Reply(request_tid, reply, 1);
+        ReplyValue(request_tid, reply);
         break;
       }
       case display_msg_header::SWITCHES: { // we assume that only changing active switches will go through here
@@ -126,7 +126,7 @@ void display_controller_task() {
         for (auto sv : switch_tab) {
           takeover.enqueue(row++, 0, sv.data());
         }
-        Reply(request_tid, reply, 1);
+        ReplyValue(request_tid, reply);
         break;
       }
       case display_msg_header::SENSOR_MSG: { // sensors
@@ -139,33 +139,33 @@ void display_controller_task() {
           message + 1
         );
         takeover.enqueue(switch_end + 1, 0, str.data());
-        Reply(request_tid, reply, 1);
+        ReplyValue(request_tid, reply);
         break;
       }
       case display_msg_header::USER_INPUT: { // user input
         message[2] = '\0';
         takeover.enqueue(user_row, 2 + user_input_char_count, message + 1);
         ++user_input_char_count;
-        Reply(request_tid, reply, 1);
+        ReplyValue(request_tid, reply);
         break;
       }
       case display_msg_header::USER_BACKSPACE: { // user pressed backspace
         --user_input_char_count;
         takeover.enqueue(user_row, 2 + user_input_char_count, " ");
-        Reply(request_tid, reply, 1);
+        ReplyValue(request_tid, reply);
         break;
       }
       case display_msg_header::USER_ENTER: { // user pressed enter
         user_input_char_count = 0;
         takeover.enqueue(user_row, 2, nullptr);
-        Reply(request_tid, reply, 1);
+        ReplyValue(request_tid, reply);
         break;
       }
       case display_msg_header::USER_NOTICE: { // string
         takeover.enqueue(user_row - 1, 2, nullptr);
         message[request] = '\0';
         takeover.enqueue(user_row - 1, 2, message + 1);
-        Reply(request_tid, reply, 1);
+        ReplyValue(request_tid, reply);
         break;
       }
       default: {
@@ -186,7 +186,7 @@ void command_controller_task() {
   command_buffer[0] = static_cast<char>(display_msg_header::USER_NOTICE);
 
   size_t curr_size = 1;
-  char reply;
+  trains::tc_reply reply;
 
   auto is_valid_train = [](int arg) {
     return 1 <= arg && arg <= 80;
@@ -216,9 +216,8 @@ void command_controller_task() {
   while (1) {
     char c = Getc(gtkterm_rx, 0);
     if (c == '\r') {
-      char enter_msg = static_cast<char>(display_msg_header::USER_ENTER);
-      Send(display_controller, &enter_msg, 1, &reply, 1);
-      Send(display_controller, command_buffer, curr_size, &reply, 1);
+      SendValue(display_controller, display_msg_header::USER_ENTER, null_reply);
+      SendValue(display_controller, command_buffer, curr_size, null_reply);
 
       int arg1 = 0, arg2 = 0;
       char char_arg = 0;
@@ -233,16 +232,16 @@ void command_controller_task() {
         if (is_valid_train(arg1) && is_valid_speed(arg2)) {
           scmd->train = arg1;
           scmd->speed = arg2;
-          int replylen = Send(train_controller, speed_cmd_msg, 1 + sizeof(trains::speed_cmd), &reply, 1);
-          if (replylen == 1 && reply == static_cast<char>(trains::tc_reply::OK)) {
+          int replylen = SendValue(train_controller, speed_cmd_msg, reply);
+          if (replylen == 1 && reply == trains::tc_reply::OK) {
             valid = true;
           }
         }
       } else if (troll::sscan(command_buffer + 1, curr_size - 1, "rv {}", arg1)) {
         if (is_valid_train(arg1)) {
           rcmd.train = arg1;
-          int replylen = Send(reverse_task, (char*)&rcmd, sizeof(trains::reverse_cmd), &reply, 1);
-          if (replylen == 1 && reply == static_cast<char>(trains::tc_reply::OK)) {
+          int replylen = SendValue(reverse_task, rcmd, reply);
+          if (replylen == 1 && reply == trains::tc_reply::OK) {
             valid = true;
           }
         }
@@ -253,9 +252,9 @@ void command_controller_task() {
             if (arg1 == active_solenoids[i]) {
               swcmd->switch_num = arg1;
               swcmd->switch_dir = char_arg == 'S' ? trains::switch_dir_t::S : trains::switch_dir_t::C;
-              int replylen = Send(switch_task, (char*)swcmd, sizeof(trains::switch_cmd), &reply, 1);
-              if (replylen == 1 && reply == static_cast<char>(trains::tc_reply::OK)) {
-                Send(display_controller, switch_cmd_msg, 1 + sizeof(trains::switch_cmd), &reply, 1);
+              int replylen = SendValue(switch_task, *swcmd, reply);
+              if (replylen == 1 && reply == trains::tc_reply::OK) {
+                SendValue(display_controller, switch_cmd_msg, reply);
                 valid = true;
               }
               break;
@@ -267,22 +266,22 @@ void command_controller_task() {
       }
 
       if (!valid) {
-        troll::snformat(command_buffer + curr_size, sizeof command_buffer - curr_size, " is invalid!");
-        Send(display_controller, command_buffer, curr_size + 13, &reply, 1);
+        const char invalid_msg[] = " is invalid!";
+        troll::snformat(command_buffer + curr_size, sizeof command_buffer - curr_size, invalid_msg);
+        SendValue(display_controller, command_buffer, curr_size + LEN_LITERAL(invalid_msg), null_reply);
       }
       curr_size = 1;
 
     } else if (c == 8 && curr_size > 1) { // back space
       curr_size--;
-      char bs_msg = static_cast<char>(display_msg_header::USER_BACKSPACE);
-      Send(display_controller, &bs_msg, 1, &reply, 1);
+      SendValue(display_controller, display_msg_header::USER_BACKSPACE, null_reply);
 
     } else if (curr_size < 65) {
       command_buffer[curr_size++] = c;
       char input_msg[2];
       input_msg[0] = static_cast<char>(display_msg_header::USER_INPUT);
       input_msg[1] = c;
-      Send(display_controller, input_msg, 2, &reply, 1);
+      SendValue(display_controller, input_msg, null_reply);
     }
   }
 }
@@ -298,7 +297,6 @@ void timer_task() {
   time->minutes = 0;
   time->seconds = 0;
   time->hundred_ms = 0;
-  char reply;
 
   uint32_t current_time = Time(clock_server);
 
@@ -317,7 +315,7 @@ void timer_task() {
       time->hours++;
       time->minutes = 0;
     }
-    Send(display_controller, message, 1 + sizeof(timer_clock_t), &reply, 1);
+    SendValue(display_controller, message, null_reply);
   }
 }
 
@@ -333,7 +331,6 @@ void idle_task() {
   message[0] = static_cast<char>(display_msg_header::IDLE_MSG);
   size_t entries = 10;
 
-  char reply;
   while (1) {
     --entries;
     // only print every 10 entries to the idle task to save the planet even more
@@ -353,7 +350,7 @@ void idle_task() {
         percentages->kernel = curr_percentages.kernel;
         percentages->user = curr_percentages.user;
 
-        Send(display_ctrl, message, messagelen, &reply, 1);
+        SendValue(display_ctrl, message, null_reply);
         prev_percentages = curr_percentages;
       }
     }
@@ -366,17 +363,15 @@ void initialize() {
   tid_t train_controller = WhoIs(trains::TRAIN_CONTROLLER_NAME);
   tid_t switch_task = WhoIs(trains::SWITCH_TASK_NAME);
 
-  char message = static_cast<char>(trains::tc_msg_header::GO_CMD);
-  char reply;
-  int replylen = Send(train_controller, &message, 1, &reply, 1);
-  if (replylen != 1 || reply != static_cast<char>(trains::tc_reply::OK)) {
+  trains::tc_reply reply;
+  int replylen = SendValue(train_controller, trains::tc_msg_header::GO_CMD, reply);
+  if (replylen != 1 || reply != trains::tc_reply::OK) {
     DEBUG_LITERAL("Could not send GO command\r\n");
     return;
   }
 
-  message = static_cast<char>(trains::tc_msg_header::SET_RESET_MODE);
-  replylen = Send(train_controller, &message, 1, &reply, 1);
-  if (replylen != 1 || reply != static_cast<char>(trains::tc_reply::OK)) {
+  replylen = SendValue(train_controller, trains::tc_msg_header::SET_RESET_MODE, reply);
+  if (replylen != 1 || reply != trains::tc_reply::OK) {
     DEBUG_LITERAL("Could not send RESET MODE command\r\n");
     return;
   }
@@ -388,8 +383,8 @@ void initialize() {
 
   for (int train = 1; train <= 80; ++train) {
     scmd->train = train;
-    Send(train_controller, speed_cmd_msg, 1 + sizeof(trains::speed_cmd), &reply, 1);
-    if (replylen != 1 || reply != static_cast<char>(trains::tc_reply::OK)) {
+    SendValue(train_controller, speed_cmd_msg, reply);
+    if (replylen != 1 || reply != trains::tc_reply::OK) {
       DEBUG_LITERAL("Could not send SPEED command\r\n");
     }
   }
@@ -401,9 +396,9 @@ void initialize() {
   for (size_t i = 0; i < num_solenoids; ++i) {
     swcmd->switch_num = active_solenoids[i];
     swcmd->switch_dir = trains::switch_dir_t::C;
-    replylen = Send(switch_task, (char*)swcmd, sizeof(trains::switch_cmd), &reply, 1);
-    if (replylen == 1 && reply == static_cast<char>(trains::tc_reply::OK)) {
-      Send(display_controller, switch_cmd_msg, 1 + sizeof(trains::switch_cmd), &reply, 1);
+    replylen = SendValue(switch_task, *swcmd, reply);
+    if (replylen == 1 && reply == trains::tc_reply::OK) {
+      SendValue(display_controller, switch_cmd_msg, reply);
     } else {
       DEBUG_LITERAL("Could not send SWITCH command\r\n");
     }

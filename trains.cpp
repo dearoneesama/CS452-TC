@@ -1,6 +1,6 @@
 #include "trains.hpp"
 #include "merklin.hpp"
-#include "user_syscall.h"
+#include "user_syscall_typed.hpp"
 #include "ui.hpp"
 
 namespace trains {
@@ -14,21 +14,21 @@ void switch_task() {
   constexpr size_t buffer_size = 1 + sizeof(switch_cmd);
   char buffer[buffer_size] = {0};
   buffer[0] = static_cast<char>(tc_msg_header::SWITCH_CMD_PART_1);
-  char turnoff_msg = static_cast<char>(tc_msg_header::SWITCH_CMD_PART_2);
   switch_cmd *msg = (switch_cmd*)(buffer+1);
-  char reply = tc_reply::OK;
 
   while (1) {
-    int request = Receive((int*)&request_tid, (char*)msg, sizeof(switch_cmd));
+    int request = ReceiveValue(request_tid, *msg);
     if (request <= 0) continue;
-    Reply(request_tid, &reply, 1);
-    int replylen = Send(train_controller, buffer, buffer_size, &reply, 1);
+    ReplyValue(request_tid, tc_reply::OK);
+
+    tc_reply reply;
+    int replylen = SendValue(train_controller, buffer, reply);
 
     // if the switch was already at that position
-    if (replylen == 1 && reply == static_cast<char>(tc_reply::SWITCH_UNCHANGED)) {
+    if (replylen == 1 && reply == tc_reply::SWITCH_UNCHANGED) {
     } else {
       Delay(clock_server, 30); // 300ms
-      Send(train_controller, &turnoff_msg, 1, &reply, 1);
+      SendValue(train_controller, tc_msg_header::SWITCH_CMD_PART_2, reply);
     }
   }
 }
@@ -43,26 +43,26 @@ void reverse_task() {
   char buffer[buffer_size] = {0};
   
   reverse_cmd *msg = (reverse_cmd*)(buffer+1);
-  char reply = tc_reply::OK;
 
   while (1) {
-    int request = Receive((int*)&request_tid, (char*)msg, sizeof(reverse_cmd));
+    int request = ReceiveValue(request_tid, *msg);
     if (request <= 0) continue;
-    Reply(request_tid, &reply, 1);
+    ReplyValue(request_tid, tc_reply::OK);
 
     buffer[0] = static_cast<char>(tc_msg_header::REVERSE_CMD_PART_1);
 
-    int replylen = Send(train_controller, buffer, buffer_size, &reply, 1);
+    tc_reply reply;
+    int replylen = SendValue(train_controller, buffer, reply);
 
     // need to think about what really happens if we send multiple reverse commands
-    if (replylen == 1 && reply == static_cast<char>(tc_reply::TRAIN_ALREADY_REVERSING)) {
+    if (replylen == 1 && reply == tc_reply::TRAIN_ALREADY_REVERSING) {
     } else {
       Delay(clock_server, 300); // 3 seconds or 3000ms
       buffer[0] = static_cast<char>(tc_msg_header::REVERSE_CMD_PART_2);
-      Send(train_controller, buffer, buffer_size, &reply, 1);
+      SendValue(train_controller, buffer, null_reply);
       Delay(clock_server, 100);
       buffer[0] = static_cast<char>(tc_msg_header::REVERSE_CMD_PART_3);
-      Send(train_controller, buffer, buffer_size, &reply, 1);
+      SendValue(train_controller, buffer, null_reply);
     }
   }
 }
@@ -128,18 +128,16 @@ void sensor_task() {
   sensor_buffer_t sensor_buffer{};
 
   char sensor_bytes[10] = {0};
-  char cmd = static_cast<char>(tc_msg_header::SENSOR_CMD);
   // size_t num_sensors = 5 * 16;
   char sensor_line_output[1 + 40];
   sensor_line_output[0] = static_cast<char>(ui::display_msg_header::SENSOR_MSG);
-  char reply;
 
   while (1) {
     if (display_controller < 1) {
       display_controller = WhoIs(ui::DISPLAY_CONTROLLER_NAME);
     }
 
-    int replylen = Send(train_controller, &cmd, 1, sensor_bytes, 10);
+    int replylen = SendValue(train_controller, tc_msg_header::SENSOR_CMD, sensor_bytes);
     if (replylen == 10) {
       char contact_1_8, contact_9_16;
       size_t idx = 0;
@@ -164,7 +162,7 @@ void sensor_task() {
       }
 
       size_t msg_len = 1 + sensor_buffer.fill_message(sensor_line_output+1);
-      Send(display_controller, sensor_line_output, msg_len, &reply, 1);
+      SendValue(display_controller, sensor_line_output, msg_len, null_reply);
     }
 
     Delay(clock_server, 20); // 200ms
@@ -195,11 +193,10 @@ void train_controller_task() {
     switch_directions[i] = switch_dir_t::NONE;
   }
 
-  char reply;
   char sensor_bytes[10];
 
   while (1) {
-    int request = Receive((int*)&request_tid, message, 128);
+    int request = ReceiveValue(request_tid, message);
     if (request <= 0) continue;
 
     switch (static_cast<tc_msg_header>(message[0])) {
@@ -210,12 +207,10 @@ void train_controller_task() {
         if (!is_train_reversing[train_num]) {
           Putc(merklin_tx, 1, train_speeds[train_num] >= 16 ? 16 : 0);
           Putc(merklin_tx, 1, (char)train_num);
-          reply = static_cast<char>(tc_reply::OK);
-          Reply(request_tid, &reply, 1);
+          ReplyValue(request_tid, tc_reply::OK);
           is_train_reversing[train_num] = true;
         } else {
-          reply = static_cast<char>(tc_reply::TRAIN_ALREADY_REVERSING);
-          Reply(request_tid, &reply, 1);
+          ReplyValue(request_tid, tc_reply::TRAIN_ALREADY_REVERSING);
         }
         break;
       }
@@ -226,8 +221,7 @@ void train_controller_task() {
         Putc(merklin_tx, 1, 15);
         Putc(merklin_tx, 1, (char)train_num);
 
-        reply = static_cast<char>(tc_reply::OK);
-        Reply(request_tid, &reply, 1);
+        ReplyValue(request_tid, tc_reply::OK);
         break;
       }
       case tc_msg_header::REVERSE_CMD_PART_3: {
@@ -237,8 +231,7 @@ void train_controller_task() {
         Putc(merklin_tx, 1, train_speeds[train_num]);
         Putc(merklin_tx, 1, (char)train_num);
         is_train_reversing[train_num] = false;
-        reply = static_cast<char>(tc_reply::OK);
-        Reply(request_tid, &reply, 1);
+        ReplyValue(request_tid, tc_reply::OK);
         break;
       }
       case tc_msg_header::SENSOR_CMD: {
@@ -246,27 +239,24 @@ void train_controller_task() {
         for (int i = 0; i < 10; ++i) {
           sensor_bytes[i] = Getc(merklin_rx, 1);
         }
-        Reply(request_tid, sensor_bytes, 10);
+        ReplyValue(request_tid, sensor_bytes);
         break;
       }
       case tc_msg_header::SWITCH_CMD_PART_1: {
         switch_cmd* cmd = (switch_cmd*)(message+1);
         if (switch_directions[cmd->switch_num] == cmd->switch_dir) {
-          reply = static_cast<char>(tc_reply::SWITCH_UNCHANGED);
-          Reply(request_tid, &reply, 1);
+          ReplyValue(request_tid, tc_reply::SWITCH_UNCHANGED);
         } else {
           Putc(merklin_tx, 1, (char)(cmd->switch_dir));
           Putc(merklin_tx, 1, (char)(cmd->switch_num));
           switch_directions[cmd->switch_num] = cmd->switch_dir;
-          reply = static_cast<char>(tc_reply::OK);
-          Reply(request_tid, &reply, 1);
+          ReplyValue(request_tid, tc_reply::OK);
         }
         break;
       }
       case tc_msg_header::SWITCH_CMD_PART_2: {
         Putc(merklin_tx, 1, static_cast<char>(special_cmd::TURNOFF_SWITCH));
-        reply = static_cast<char>(tc_reply::OK);
-        Reply(request_tid, &reply, 1);
+        ReplyValue(request_tid, tc_reply::OK);
         break;
       }
       case tc_msg_header::SPEED: {
@@ -278,24 +268,20 @@ void train_controller_task() {
           Putc(merklin_tx, 1, (char)speed);
           Putc(merklin_tx, 1, (char)train_num);
           train_speeds[train_num] = speed;
-          reply = static_cast<char>(tc_reply::OK);
-          Reply(request_tid, &reply, 1);
+          ReplyValue(request_tid, tc_reply::OK);
         } else {
-          reply = static_cast<char>(tc_reply::TRAIN_ALREADY_REVERSING);
-          Reply(request_tid, &reply, 1);
+          ReplyValue(request_tid, tc_reply::TRAIN_ALREADY_REVERSING);
         }
         break;
       }
       case tc_msg_header::GO_CMD: {
         Putc(merklin_tx, 1, static_cast<char>(special_cmd::GO));
-        reply = static_cast<char>(tc_reply::OK);
-        Reply(request_tid, &reply, 1);
+        ReplyValue(request_tid, tc_reply::OK);
         break;
       }
       case tc_msg_header::SET_RESET_MODE: {
         Putc(merklin_tx, 1, static_cast<char>(special_cmd::RESET_MODE));
-        reply = static_cast<char>(tc_reply::OK);
-        Reply(request_tid, &reply, 1);
+        ReplyValue(request_tid, tc_reply::OK);
         break;
       }
       default: break;
