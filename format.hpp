@@ -558,7 +558,7 @@ namespace troll {
       tabulate *that_;
       typename title_row_args_type::title_it_type title_it_;
 
-      union {
+      union opt_elem_its_t {
         std::tuple<typename ElemRowArgs::elem_it_type...> its;
         char null;
       } elem_its_;
@@ -572,43 +572,69 @@ namespace troll {
       } state_;
       size_type state_which_elem_ = 0;
 
-      iterator(
-        tabulate *tab,
-        typename title_row_args_type::title_it_type title_begin,
-        decltype(elem_its_) elem_begins,
-        state s = state::top_line
-      ) : that_{tab}, title_it_{title_begin}, elem_its_{elem_begins}, state_{s} {}
-
+      template<class T, class E>
+      iterator(tabulate *tab, T &&title_begin, E &&elem_begins, state s = state::top_line)
+        : that_{tab}, title_it_{std::forward<T>(title_begin)}, elem_its_{std::forward<E>(elem_begins)}, state_{s} {}
     };
 
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wpedantic" // named initializer
     constexpr iterator begin() {
-      return iterator{this, title_row_args_.begin, {.its=project_elem_its_(std::make_index_sequence<num_elem_row_args>{})}};
+      using elem = typename iterator::opt_elem_its_t;
+      return iterator{this, title_row_args_.begin, elem{.its=project_elem_its_(std::make_index_sequence<num_elem_row_args>{})}};
     }
 
     constexpr iterator end() {
-      return iterator{this, title_row_args_.end, {.null=0}, iterator::state::end};
+      using elem = typename iterator::opt_elem_its_t;
+      return iterator{this, title_row_args_.end, elem{.null=0}, iterator::state::end};
     }
 #pragma GCC diagnostic pop
 
     /**
-     * reset the iterators so this object can be used again.
+     * reset this object to use a new range of data.
      */
-    constexpr void reset_src_iterator(
-      typename title_row_args_type::title_it_type title_begin,
-      typename title_row_args_type::title_it_type title_end,
-      typename ElemRowArgs::elem_it_type ...elem_begins)
+    template<class Tit1, class Tit2, class ...Elems>
+    constexpr void reset_src_iterator(Tit1 &&title_begin, Tit2 &&title_end, Elems &&...elem_begins)
     {
-      title_row_args_.begin = title_begin;
-      title_row_args_.end = title_end;
-      reset_elem_begins_(std::make_index_sequence<num_elem_row_args>{}, elem_begins...);
+      title_row_args_.begin = std::forward<Tit1>(title_begin);
+      title_row_args_.end = std::forward<Tit2>(title_end);
+      reset_elem_begins_(std::make_index_sequence<num_elem_row_args>{}, std::forward<Elems>(elem_begins)...);
+    }
+
+    /**
+     * returns col, row and a string to be used to patch a printed table assuming
+     * value has changed. use only when a field in the table is supposed to be modified.
+     * if elements are added or deleted from the src iterable, use reset_src_iterator() instead.
+     * - ArgRow: ith row as provided to make_tabulate(), eg. 0 -> title row, 1 -> first element row
+     * - it_index: index of the value in that element row
+     * - v: value that changed
+     */
+    template<size_t ArgRow, class V>
+    constexpr auto patch_str(size_t it_index, const V &v) {
+      size_t col = 1 + (has_heading_ ? HeadingPadding : 0) + (it_index % elems_per_row) * ContentPadding;
+      size_t skip_full_rows = it_index / elems_per_row;
+      size_t row = (skip_full_rows * (1 + num_elem_row_args) + ArgRow) * 2 + 1;
+      auto padded = pad<ContentPadding>(sformat<ContentPadding>("{}", v), padding::middle);
+
+      if constexpr (ArgRow == 0) {
+        using style = typename title_row_args_type::title_style_type;
+        auto str = sformat<style::wrapper_str_size + ContentPadding>(
+          "{}{}{}", style::enabler_str(), padded, style::disabler_str()
+        );
+        return std::make_tuple(row, col, str);
+      } else {
+        using style = typename std::tuple_element_t<ArgRow - 1, elem_row_args_type>::elem_style_type;
+        auto str = sformat<style::wrapper_str_size + ContentPadding>(
+          "{}{}{}", style::enabler_str(), padded, style::disabler_str()
+        );
+        return std::make_tuple(row, col, str);
+      }
     }
 
   private:
-    template<size_type ...I>
-    constexpr void reset_elem_begins_(std::index_sequence<I...>, typename ElemRowArgs::elem_it_type ...elem_begins) {
-      ((void)(std::get<I>(elem_row_args_).begin = elem_begins), ...);
+    template<size_type ...I, class ...Elems>
+    constexpr void reset_elem_begins_(std::index_sequence<I...>, Elems &&...elem_begins) {
+      ((void)(std::get<I>(elem_row_args_).begin = std::forward<Elems>(elem_begins)), ...);
     }
 
     template<size_type ...I>

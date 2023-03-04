@@ -288,6 +288,51 @@ R"(+----------------------------------------------------------------------------
 
     compare(tab, expected);
   }
+
+  SECTION("do patch") {
+    const char *titles[] = {"tita1", "tita2", "titb3", "titc4", "titx5", "titw6", "tita7", "titu8", "tt9"};
+    int data[] = {1, 2, 3, 4, 57, 6, 7, 8, 9};
+    int data2[] = {1, 2, 3, 44, 5, 6, 7, 8, 9};
+    auto tab = troll::make_tabulate<4, 12, 10>(
+      troll::static_ansi_style_options<troll::ansi_font::none, troll::ansi_color::blue>{},
+      troll::tabulate_title_row_args{"heading1", titles, titles + 9, troll::static_ansi_style_options<troll::ansi_font::bold>{}},
+      troll::tabulate_elem_row_args{"elem1", data, troll::static_ansi_style_options_none},
+      troll::tabulate_elem_row_args{"elem2", data2, troll::static_ansi_style_options<troll::ansi_font::none, troll::ansi_color::red>{}},
+      troll::tabulate_elem_row_args{"elem1", titles, troll::static_ansi_style_options_none}
+    );
+
+    // patch title
+    auto [row, col, pat] = tab.patch_str<0>(0, 1234);  // tita1
+    REQUIRE(row == 1);
+    REQUIRE(col == 13);
+    REQUIRE(pat == "\033[1m   1234   \033[0m");
+    auto [row2, col2, pat2] = tab.patch_str<0>(5, 1234);  // titw6
+    REQUIRE(row2 == 9);
+    REQUIRE(col2 == 23);
+
+    // patch elem1
+    auto [row3, col3, pat3] = tab.patch_str<1>(0, 1234);  // 1
+    REQUIRE(row3 == 3);
+    REQUIRE(col3 == 13);
+    REQUIRE(pat3 == "   1234   ");
+    auto [row4, col4, pat4] = tab.patch_str<1>(6, 1234);  // 7
+    REQUIRE(row4 == 11);
+    REQUIRE(col4 == 33);
+
+    // patch elem2
+    auto [row5, col5, pat5] = tab.patch_str<2>(2, 4321);  // 3
+    REQUIRE(row5 == 5);
+    REQUIRE(col5 == 33);
+    REQUIRE(pat5 == "\033[31m   4321   \033[0m");
+    auto [row6, col6, pat6] = tab.patch_str<2>(7, 4321);  // 8
+    REQUIRE(row6 == 13);
+    REQUIRE(col6 == 43);
+
+    // patch elem3
+    auto [row7, col7, pat7] = tab.patch_str<3>(8, 4321);  // tt9
+    REQUIRE(row7 == 23);
+    REQUIRE(col7 == 13);
+  }
 }
 
 TEST_CASE("output control usage", "[OutputControl]") {

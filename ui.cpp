@@ -116,11 +116,9 @@ void display_controller_task() {
         int switch_num = cmd->switch_num;
         int offset = switch_num <= 18 ? 1 : 135;
         switch_table_values[switch_num - offset] = dir;
-        // redraw table
-        size_t row = 4;
-        for (auto sv : switch_tab) {
-          takeover.enqueue(row++, 0, sv.data());
-        }
+        // patch table
+        auto [row, col, patch] = switch_tab.patch_str<1>(switch_num - offset, dir);
+        takeover.enqueue(row + 4, col, patch.data());
         ReplyValue(request_tid, reply);
         break;
       }
