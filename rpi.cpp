@@ -345,19 +345,22 @@ extern "C" void* memcpy(void* __restrict__ dest, const void* __restrict__ src, s
   auto src_mod = (uintptr_t)src & 7;
   if (
     n < 8  // too small
-    || (n < 64 && (dest_mod || src_mod)) // not aligned, but still too small to worth it
-    || (dest_mod && dest_mod == src_mod) // never aligns
+    || (dest_mod && dest_mod != src_mod) // never aligns
   ) {
     while (n--) *(cdest++) = *(csrc++);
     return dest;
   }
 
   // try to align
-  while (((uintptr_t)cdest & 7 || (uintptr_t)csrc & 7) && n) {
-    *(cdest++) = *(csrc++);
-    --n;
+  if (dest_mod) {
+    auto remain = 8 - dest_mod;
+    while (remain && n) {
+      *(cdest++) = *(csrc++);
+      --n;
+      --remain;
+    }
+    if (!n) return dest;
   }
-  if (!n) return dest;
 
   u64dest = (uint64_t*)cdest;
   u64src = (uint64_t*)csrc;
