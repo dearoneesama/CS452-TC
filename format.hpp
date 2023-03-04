@@ -323,7 +323,7 @@ namespace troll {
   tabulate_elem_row_args(ElemIt, ElemStyle) -> tabulate_elem_row_args<const char *, ElemIt, ElemStyle, ElemStyle>;
 
   /**
-   * single-use iterator to tabulate text. it outputs text line by line.
+   * helper class to tabulate text. it outputs text line by line.
    */
   template<size_t ElemsPerRow, size_t HeadingPadding, size_t ContentPadding, class DividerStyle, class TitleRowArgs, class ...ElemRowArgs>
   class tabulate {
@@ -449,7 +449,11 @@ namespace troll {
       using iterator_category = std::input_iterator_tag;
 
       constexpr bool operator==(const iterator &rhs) const {
-        return that_ == rhs.that_;
+        // put the most likely to trail first
+        return state_ == rhs.state_ &&
+          that_ == rhs.that_ &&
+          title_it_ == rhs.title_it_ &&
+          state_which_elem_ == rhs.state_which_elem_;
       }
 
       constexpr bool operator!=(const iterator &rhs) const {
@@ -473,27 +477,27 @@ namespace troll {
 
     public:
       constexpr value_type operator*() const {
-        switch (that_->state_) {
+        switch (state_) {
           case state::top_line:
           case state::middle_line:
             return that_->divider_text_;
           case state::title_line:
             return that_->title_text_;
           case state::elem_line:
-            return get_elem_text_(that_->state_which_elem_);
+            return get_elem_text_(state_which_elem_);
           default:
             __builtin_unreachable();
         }
       }
 
       constexpr iterator &operator++() {
-        if (that_->state_ == state::top_line) {
+        if (state_ == state::top_line) {
           char buf[content_padding + 1];
           // write down the titles
           size_type titles = 0;
-          auto &ta = that_->title_row_args_;
-          for (; ta.begin != ta.end && titles < elems_per_row; ++ta.begin, ++titles) {
-            auto sz = snformat(buf, content_padding + 1, "{}", *ta.begin);
+          auto &end = that_->title_row_args_.end;
+          for (; title_it_ != end && titles < elems_per_row; ++title_it_, ++titles) {
+            auto sz = snformat(buf, content_padding + 1, "{}", *title_it_);
             troll::pad(that_->title_begin_ + titles * content_padding, content_padding, buf, sz, padding::middle);
           }
           // in case row is not full
@@ -501,7 +505,8 @@ namespace troll {
 
           if (titles == 0) {
             // no more
-            that_ = nullptr;
+            state_ = state::end;
+            state_which_elem_ = 0;
             return *this;
           }
 
@@ -509,19 +514,19 @@ namespace troll {
           do_elem_row_(std::make_index_sequence<num_elem_row_args>{}, titles);
         }
         // advance state
-        switch (that_->state_) {
-          case state::top_line: that_->state_ = state::title_line; break;
+        switch (state_) {
+          case state::top_line: state_ = state::title_line; break;
           case state::title_line:
-            that_->state_ = num_elem_row_args ? state::middle_line : state::top_line;
+            state_ = num_elem_row_args ? state::middle_line : state::top_line;
             break;
-          case state::middle_line: that_->state_ = state::elem_line; break;
+          case state::middle_line: state_ = state::elem_line; break;
           case state::elem_line:
-            if (that_->state_which_elem_ == num_elem_row_args - 1) {
-              that_->state_which_elem_ = 0;
-              that_->state_ = state::top_line;
+            if (state_which_elem_ == num_elem_row_args - 1) {
+              state_which_elem_ = 0;
+              state_ = state::top_line;
             } else {
-              ++that_->state_which_elem_;
-              that_->state_ = state::middle_line;
+              ++state_which_elem_;
+              state_ = state::middle_line;
             }
           default: break;
         }
@@ -538,10 +543,10 @@ namespace troll {
       template<size_type I>
       void do_elem_row_(size_type titles) {
         char buf[content_padding + 1];
-        auto &args = std::get<I>(that_->elem_row_args_);
+        auto &it = std::get<I>(elem_its_.its);
         char *p = that_->elem_begins_[I];
-        for (size_type elems = 0; elems < titles; ++args.begin, ++elems) {
-          auto sz = snformat(buf, content_padding + 1, "{}", *args.begin);
+        for (size_type elems = 0; elems < titles; ++it, ++elems) {
+          auto sz = snformat(buf, content_padding + 1, "{}", *it);
           troll::pad(p + elems * content_padding, content_padding, buf, sz, padding::middle);
         }
         // in case row is not full
@@ -549,17 +554,43 @@ namespace troll {
       }
 
       friend class tabulate;
-      iterator(tabulate *tab) : that_{tab} {}
+
       tabulate *that_;
+      typename title_row_args_type::title_it_type title_it_;
+
+      union {
+        std::tuple<typename ElemRowArgs::elem_it_type...> its;
+        char null;
+      } elem_its_;
+
+      enum class state : char {
+        top_line = 0,
+        title_line,
+        middle_line,
+        elem_line,
+        end,
+      } state_;
+      size_type state_which_elem_ = 0;
+
+      iterator(
+        tabulate *tab,
+        typename title_row_args_type::title_it_type title_begin,
+        decltype(elem_its_) elem_begins,
+        state s = state::top_line
+      ) : that_{tab}, title_it_{title_begin}, elem_its_{elem_begins}, state_{s} {}
+
     };
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wpedantic" // named initializer
     constexpr iterator begin() {
-      return iterator{this};
+      return iterator{this, title_row_args_.begin, {.its=project_elem_its_(std::make_index_sequence<num_elem_row_args>{})}};
     }
 
     constexpr iterator end() {
-      return iterator{nullptr};
+      return iterator{this, title_row_args_.end, {.null=0}, iterator::state::end};
     }
+#pragma GCC diagnostic pop
 
     /**
      * reset the iterators so this object can be used again.
@@ -572,14 +603,17 @@ namespace troll {
       title_row_args_.begin = title_begin;
       title_row_args_.end = title_end;
       reset_elem_begins_(std::make_index_sequence<num_elem_row_args>{}, elem_begins...);
-      state_ = state::top_line;
-      state_which_elem_ = 0;
     }
 
   private:
     template<size_type ...I>
     constexpr void reset_elem_begins_(std::index_sequence<I...>, typename ElemRowArgs::elem_it_type ...elem_begins) {
       ((void)(std::get<I>(elem_row_args_).begin = elem_begins), ...);
+    }
+
+    template<size_type ...I>
+    constexpr auto project_elem_its_(std::index_sequence<I...>) {
+      return std::make_tuple(std::get<I>(elem_row_args_).begin...);
     }
 
     friend class iterator;
@@ -606,15 +640,6 @@ namespace troll {
       + divider_wrapper_size_ * 2
     ]...> elem_texts_;
     char *elem_begins_[num_elem_row_args ? num_elem_row_args : 1];
-
-    enum class state : char {
-      top_line = 0,
-      title_line,
-      middle_line,
-      elem_line,
-      end,
-    } state_ = state::top_line;
-    size_type state_which_elem_ = 0;
   };
 
   /**

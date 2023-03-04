@@ -11,7 +11,7 @@ uint32_t buffer_to_uint32(char* buffer);
 
 namespace troll {
   /**
-   * one-time iterator to transform a range.
+   * iterator to transform a range.
    */
   template<class InputIt, class Fn>
   class it_transform {
@@ -28,7 +28,7 @@ namespace troll {
       using iterator_category = std::input_iterator_tag;
 
       constexpr bool operator==(const iterator &other) const noexcept {
-        return that_ == other.that_;
+        return curr_ == other.curr_ && that_ == other.that_;
       }
 
       constexpr bool operator!=(const iterator &other) const noexcept {
@@ -36,29 +36,26 @@ namespace troll {
       }
 
       constexpr iterator &operator++() noexcept {
-        if (that_->begin_ == that_->end_) {
-          that_ = nullptr;
-        } else {
-          ++that_->begin_;
-        }
+        ++curr_;
         return *this;
       }
 
-      constexpr auto operator*() const noexcept {
-        return that_->fn_(*that_->begin_);
+      constexpr decltype(auto) operator*() const noexcept {
+        return that_->fn_(*curr_);
       }
 
     private:
-      constexpr iterator(it_transform *that) noexcept : that_(that) {}
+      constexpr iterator(it_transform *that, InputIt begin) noexcept : that_(that), curr_(begin) {}
       friend class it_transform;
       it_transform *that_;
+      InputIt curr_;
     };
 
     constexpr iterator begin() noexcept {
-      return iterator(this);
+      return iterator(this, begin_);
     }
     constexpr iterator end() noexcept {
-      return iterator(nullptr);
+      return iterator(this, end_);
     }
 
     constexpr void reset_src_iterator(InputIt begin, InputIt end) noexcept {

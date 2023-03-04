@@ -117,11 +117,6 @@ void display_controller_task() {
         int offset = switch_num <= 18 ? 1 : 135;
         switch_table_values[switch_num - offset] = dir;
         // redraw table
-        switch_tab.reset_src_iterator(
-          switch_table_titles,
-          switch_table_titles + num_switches,
-          switch_table_values
-        );
         size_t row = 4;
         for (auto sv : switch_tab) {
           takeover.enqueue(row++, 0, sv.data());

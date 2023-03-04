@@ -212,13 +212,15 @@ R"(+----------------------------+
     compare(tab, expected);
   }
 
-  SECTION("use with range transform") {
-    struct {
+  SECTION("use with range transform and resetting") {
+    struct triple {
       int a, b, c;
-    } data[] = {{1, 2, 3}, {4, 5, 6}, {7, 8, 9}};
-    auto get_a = troll::it_transform(data, data + 2, [](auto &e) { return e.a; });
-    auto get_b = troll::it_transform(data, data + 2, [](auto &e) { return e.b; });
-    auto get_c = troll::it_transform(data, data + 2, [](auto &e) { return e.c; });
+    };
+    triple data[] = {{1, 2, 3}, {4, 5, 6}, {7, 8, 9}};
+    auto get_a = troll::it_transform(data, data + 3, [](auto &e) { return e.a; });
+    auto get_b = troll::it_transform(data, data + 3, [](auto &e) { return e.b; });
+    auto get_c = troll::it_transform(data, data + 3, [](auto &e) { return e.c; });
+
     auto tab = troll::make_tabulate<3, 7>(
       troll::static_ansi_style_options_none,
       troll::tabulate_title_row_args{"", get_a.begin(), get_a.end(), troll::static_ansi_style_options_none},
@@ -236,17 +238,15 @@ R"(+---------------------+
 +---------------------+
 )";
     compare(tab, expected);
+    // iterate again
+    compare(tab, expected);
 
-    // reset it
+    // mutate source
     data[0].a = 10;
     data[0].b = 11;
     data[0].c = 12;
     data[1].a = 13;
     data[1].b = 14;
-    get_a.reset_src_iterator(data, data + 2);
-    get_b.reset_src_iterator(data, data + 2);
-    get_c.reset_src_iterator(data, data + 2);
-    tab.reset_src_iterator(get_a.begin(), get_a.end(), get_b.begin(), get_c.begin());
 
     const char expected2[] =
 R"(+---------------------+
@@ -258,6 +258,19 @@ R"(+---------------------+
 +---------------------+
 )";
     compare(tab, expected2);
+    // iterate again
+    compare(tab, expected2);
+    compare(tab, expected2);
+
+    // reset source
+    triple data2[] = {{1, 2, 3}, {4, 5, 6}, {7, 8, 9}};
+
+    get_a.reset_src_iterator(data2, data2 + 3);
+    get_b.reset_src_iterator(data2, data2 + 3);
+    get_c.reset_src_iterator(data2, data2 + 3);
+    tab.reset_src_iterator(get_a.begin(), get_a.end(), get_b.begin(), get_c.begin());
+
+    compare(tab, expected);
   }
 
   SECTION("only title row") {
