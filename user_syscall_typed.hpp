@@ -7,7 +7,7 @@
 inline auto TaskFinder(const char* name) {
   auto tid = WhoIs(name);
   return [name, tid] () mutable -> tid_t {
-    if (tid < 0) {
+    if (tid < 1) {
       tid = WhoIs(name);
     }
     return tid;
