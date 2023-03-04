@@ -2,7 +2,17 @@
 
 #include "user_syscall.h"
 
-// syscall wrapper templates
+// syscall wrapper functions and templates
+
+inline auto TaskFinder(const char* name) {
+  auto tid = WhoIs(name);
+  return [name, tid] () mutable -> tid_t {
+    if (tid < 0) {
+      tid = WhoIs(name);
+    }
+    return tid;
+  };
+}
 
 struct null_reply_t {};
 static constexpr null_reply_t null_reply;

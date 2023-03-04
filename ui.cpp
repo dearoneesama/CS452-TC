@@ -19,7 +19,7 @@ void display_controller_task() {
   using namespace troll;
 
   RegisterAs(DISPLAY_CONTROLLER_NAME);
-  tid_t gtkterm_tx = WhoIs(gtkterm::GTK_TX_SERVER_NAME);
+  auto gtkterm_tx = TaskFinder(gtkterm::GTK_TX_SERVER_NAME);
 
   tid_t request_tid;
 
@@ -79,7 +79,7 @@ void display_controller_task() {
   while (1) {
     while (!takeover.empty()) {
       auto sv = takeover.dequeue();
-      Puts(gtkterm_tx, 0, sv.data(), sv.size());
+      Puts(gtkterm_tx(), 0, sv.data(), sv.size());
     }
 
     int request = ReceiveValue(request_tid, message);
@@ -176,11 +176,11 @@ void display_controller_task() {
 }
 
 void command_controller_task() {
-  tid_t gtkterm_rx = WhoIs(gtkterm::GTK_RX_SERVER_NAME);
-  tid_t display_controller = WhoIs(DISPLAY_CONTROLLER_NAME);
-  tid_t train_controller = WhoIs(trains::TRAIN_CONTROLLER_NAME);
-  tid_t reverse_task = WhoIs(trains::REVERSE_TASK_NAME);
-  tid_t switch_task = WhoIs(trains::SWITCH_TASK_NAME);
+  auto gtkterm_rx = TaskFinder(gtkterm::GTK_RX_SERVER_NAME);
+  auto display_controller = TaskFinder(DISPLAY_CONTROLLER_NAME);
+  auto train_controller = TaskFinder(trains::TRAIN_CONTROLLER_NAME);
+  auto reverse_task = TaskFinder(trains::REVERSE_TASK_NAME);
+  auto switch_task = TaskFinder(trains::SWITCH_TASK_NAME);
 
   char command_buffer[1 + 64];
   command_buffer[0] = static_cast<char>(display_msg_header::USER_NOTICE);
@@ -214,10 +214,10 @@ void command_controller_task() {
   swcmd->switch_num = 0;
 
   while (1) {
-    char c = Getc(gtkterm_rx, 0);
+    char c = Getc(gtkterm_rx(), 0);
     if (c == '\r') {
-      SendValue(display_controller, display_msg_header::USER_ENTER, null_reply);
-      SendValue(display_controller, command_buffer, curr_size, null_reply);
+      SendValue(display_controller(), display_msg_header::USER_ENTER, null_reply);
+      SendValue(display_controller(), command_buffer, curr_size, null_reply);
 
       int arg1 = 0, arg2 = 0;
       char char_arg = 0;
@@ -232,7 +232,7 @@ void command_controller_task() {
         if (is_valid_train(arg1) && is_valid_speed(arg2)) {
           scmd->train = arg1;
           scmd->speed = arg2;
-          int replylen = SendValue(train_controller, speed_cmd_msg, reply);
+          int replylen = SendValue(train_controller(), speed_cmd_msg, reply);
           if (replylen == 1 && reply == trains::tc_reply::OK) {
             valid = true;
           }
@@ -240,7 +240,7 @@ void command_controller_task() {
       } else if (troll::sscan(command_buffer + 1, curr_size - 1, "rv {}", arg1)) {
         if (is_valid_train(arg1)) {
           rcmd.train = arg1;
-          int replylen = SendValue(reverse_task, rcmd, reply);
+          int replylen = SendValue(reverse_task(), rcmd, reply);
           if (replylen == 1 && reply == trains::tc_reply::OK) {
             valid = true;
           }
@@ -252,9 +252,9 @@ void command_controller_task() {
             if (arg1 == active_solenoids[i]) {
               swcmd->switch_num = arg1;
               swcmd->switch_dir = char_arg == 'S' ? trains::switch_dir_t::S : trains::switch_dir_t::C;
-              int replylen = SendValue(switch_task, *swcmd, reply);
+              int replylen = SendValue(switch_task(), *swcmd, reply);
               if (replylen == 1 && reply == trains::tc_reply::OK) {
-                SendValue(display_controller, switch_cmd_msg, reply);
+                SendValue(display_controller(), switch_cmd_msg, reply);
                 valid = true;
               }
               break;
@@ -268,27 +268,27 @@ void command_controller_task() {
       if (!valid) {
         const char invalid_msg[] = " is invalid!";
         troll::snformat(command_buffer + curr_size, sizeof command_buffer - curr_size, invalid_msg);
-        SendValue(display_controller, command_buffer, curr_size + LEN_LITERAL(invalid_msg), null_reply);
+        SendValue(display_controller(), command_buffer, curr_size + LEN_LITERAL(invalid_msg), null_reply);
       }
       curr_size = 1;
 
     } else if (c == 8 && curr_size > 1) { // back space
       curr_size--;
-      SendValue(display_controller, display_msg_header::USER_BACKSPACE, null_reply);
+      SendValue(display_controller(), display_msg_header::USER_BACKSPACE, null_reply);
 
     } else if (curr_size < 65) {
       command_buffer[curr_size++] = c;
       char input_msg[2];
       input_msg[0] = static_cast<char>(display_msg_header::USER_INPUT);
       input_msg[1] = c;
-      SendValue(display_controller, input_msg, null_reply);
+      SendValue(display_controller(), input_msg, null_reply);
     }
   }
 }
 
 void timer_task() {
-  tid_t display_controller = WhoIs(DISPLAY_CONTROLLER_NAME);
-  tid_t clock_server = WhoIs("clock_server");
+  auto display_controller = TaskFinder(DISPLAY_CONTROLLER_NAME);
+  auto clock_server = TaskFinder("clock_server");
 
   char message[1 + sizeof(timer_clock_t)];
   message[0] = display_msg_header::TIMER_CLOCK_MSG;
@@ -298,10 +298,10 @@ void timer_task() {
   time->seconds = 0;
   time->hundred_ms = 0;
 
-  uint32_t current_time = Time(clock_server);
+  uint32_t current_time = Time(clock_server());
 
   while (1) {
-    current_time = DelayUntil(clock_server, current_time + 10); // every 100ms
+    current_time = DelayUntil(clock_server(), current_time + 10); // every 100ms
     time->hundred_ms++;
     if (time->hundred_ms == 10) {
       time->seconds++;
@@ -315,13 +315,13 @@ void timer_task() {
       time->hours++;
       time->minutes = 0;
     }
-    SendValue(display_controller, message, null_reply);
+    SendValue(display_controller(), message, null_reply);
   }
 }
 
 // todo: move this somewhere else
 void idle_task() {
-  tid_t display_ctrl = WhoIs(DISPLAY_CONTROLLER_NAME);
+  auto display_ctrl = TaskFinder(DISPLAY_CONTROLLER_NAME);
 
   time_percentage_t prev_percentages = {0, 0, 0};
   time_percentage_t curr_percentages = {0, 0, 0};
@@ -350,7 +350,7 @@ void idle_task() {
         percentages->kernel = curr_percentages.kernel;
         percentages->user = curr_percentages.user;
 
-        SendValue(display_ctrl, message, null_reply);
+        SendValue(display_ctrl(), message, null_reply);
         prev_percentages = curr_percentages;
       }
     }
@@ -359,18 +359,18 @@ void idle_task() {
 }
 
 void initialize() {
-  tid_t display_controller = WhoIs(DISPLAY_CONTROLLER_NAME);
-  tid_t train_controller = WhoIs(trains::TRAIN_CONTROLLER_NAME);
-  tid_t switch_task = WhoIs(trains::SWITCH_TASK_NAME);
+  auto display_controller = TaskFinder(DISPLAY_CONTROLLER_NAME);
+  auto train_controller = TaskFinder(trains::TRAIN_CONTROLLER_NAME);
+  auto switch_task = TaskFinder(trains::SWITCH_TASK_NAME);
 
   trains::tc_reply reply;
-  int replylen = SendValue(train_controller, trains::tc_msg_header::GO_CMD, reply);
+  int replylen = SendValue(train_controller(), trains::tc_msg_header::GO_CMD, reply);
   if (replylen != 1 || reply != trains::tc_reply::OK) {
     DEBUG_LITERAL("Could not send GO command\r\n");
     return;
   }
 
-  replylen = SendValue(train_controller, trains::tc_msg_header::SET_RESET_MODE, reply);
+  replylen = SendValue(train_controller(), trains::tc_msg_header::SET_RESET_MODE, reply);
   if (replylen != 1 || reply != trains::tc_reply::OK) {
     DEBUG_LITERAL("Could not send RESET MODE command\r\n");
     return;
@@ -383,7 +383,7 @@ void initialize() {
 
   for (int train = 1; train <= 80; ++train) {
     scmd->train = train;
-    SendValue(train_controller, speed_cmd_msg, reply);
+    SendValue(train_controller(), speed_cmd_msg, reply);
     if (replylen != 1 || reply != trains::tc_reply::OK) {
       DEBUG_LITERAL("Could not send SPEED command\r\n");
     }
@@ -396,9 +396,9 @@ void initialize() {
   for (size_t i = 0; i < num_solenoids; ++i) {
     swcmd->switch_num = active_solenoids[i];
     swcmd->switch_dir = trains::switch_dir_t::C;
-    replylen = SendValue(switch_task, *swcmd, reply);
+    replylen = SendValue(switch_task(), *swcmd, reply);
     if (replylen == 1 && reply == trains::tc_reply::OK) {
-      SendValue(display_controller, switch_cmd_msg, reply);
+      SendValue(display_controller(), switch_cmd_msg, reply);
     } else {
       DEBUG_LITERAL("Could not send SWITCH command\r\n");
     }
