@@ -14,6 +14,18 @@ void merklin_rxnotifer() {
   }
 }
 
+#if IS_TRACK_A
+// work around for track A
+void delay_notifier() {
+  tid_t server = MyParentTid();
+  auto clock_server = TaskFinder("clock_server");
+  while (1) {
+    SendValue(server, 'd', null_reply);
+    Delay(clock_server(), 15); // 150ms delay
+  }
+}
+#endif
+
 void merklin_ctsnotifier() {
   tid_t server = MyParentTid();
   int value;
@@ -74,13 +86,19 @@ void merklin_rxserver() {
 void merklin_txserver() {
   RegisterAs(MERK_TX_SERVER_NAME);
   tid_t tx_notifier = Create(priority_t::PRIORITY_L1, merklin_txnotifier);
+
+#if IS_TRACK_A
+  tid_t d_notifier = Create(priority_t::PRIORITY_L2, delay_notifier);
+  bool can_send = false;
+#else
   tid_t cts_notifier = Create(priority_t::PRIORITY_L1, merklin_ctsnotifier);
+  bool cts_gone_back_up = true;
+  bool cts = true;
+#endif
   tid_t request_tid;
   char message[2];
   etl::queue<char, 512> char_queue;
   char reply = 'o';
-  bool cts_gone_back_up = true;
-  bool cts = true;
   bool tx_up = true;
 
   while (1) {
@@ -88,6 +106,21 @@ void merklin_txserver() {
     if (request <= 0) continue;
 
     switch (message[0]) {
+#if IS_TRACK_A
+      case 'd': { // delay
+        can_send = true;
+        break;
+      }
+#else
+      case 'c': { // cts notifier
+        cts_gone_back_up = !cts_gone_back_up;
+        if (cts_gone_back_up) {
+          cts = true;
+        }
+        ReplyValue(cts_notifier, reply);
+        break;
+      }
+#endif
       case 'p': { // putc
         char_queue.push(message[1]);
         ReplyValue(request_tid, reply);
@@ -97,26 +130,31 @@ void merklin_txserver() {
         tx_up = true;
         break;
       }
-      case 'c': { // cts notifier
-        cts_gone_back_up = !cts_gone_back_up;
-        if (cts_gone_back_up) {
-          cts = true;
-        }
-        ReplyValue(cts_notifier, reply);
-        break;
-      }
       default: break;
     }
 
+#if IS_TRACK_A
+    if (tx_up && can_send && !char_queue.empty()) {
+      UartWriteRegister(1, rpi::UART_THR, char_queue.front());
+      char_queue.pop();
+      tx_up = false;
+      can_send = false;
+      ReplyValue(tx_notifier, reply);
+      ReplyValue(d_notifier, reply);
+    }
+#else
     // check whether or not we can write
     if (tx_up && cts && cts_gone_back_up && !char_queue.empty()) {
       UartWriteRegister(1, rpi::UART_THR, char_queue.front());
       char_queue.pop();
       tx_up = false;
+#if DEBUG_PI
+#else
       cts = false;
-
+#endif
       ReplyValue(tx_notifier, reply);
     }
+#endif
   }
 }
 

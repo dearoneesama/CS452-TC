@@ -1,5 +1,5 @@
 ifeq ($(JIXI_LOCAL), 1)
-	XDIR:=~/Projects/cs452-project/arm-gnu-toolchain-12.2.rel1-darwin-x86_64-aarch64-none-elf
+	XDIR:=./cs452-public-xdev
 else ifeq ($(RUNNER_IMAGE), 1)
 	XDIR:=/usr/cs452-public-xdev
 else
@@ -15,13 +15,27 @@ OUTPUT := build
 
 ETL_INCLUDE:=thirdparty/etl/include
 
+# dbg
+ifeq ($(IS_TRACK_A), 1)
+	IS_TRACK_A_CFLAG+=-DIS_TRACK_A=1
+else
+	IS_TRACK_A_CFLAG+=-DIS_TRACK_A=0
+endif
+
+ifeq ($(DEBUG_PI), 1)
+	DEBUG_PI_CFLAG+=-DDEBUG_PI=1
+else
+	DEBUG_PI_CFLAG+=-DDEBUG_PI=0
+endif
+
 # COMPILE OPTIONS
 WARNINGS=-Wall -Wextra -Wpedantic -Wno-unused-const-variable
 BENCHMARKING=0
 OPTLVL=-O3
 CFLAGS:= $(OPTLVL) -pipe -static $(WARNINGS) -ffreestanding -nostartfiles \
 	-mcpu=$(ARCH) -static-pie -mstrict-align -fno-builtin -mgeneral-regs-only \
-	-fno-rtti -fno-exceptions -nostdlib -lgcc -std=gnu++17 -I $(ETL_INCLUDE) -DBENCHMARKING=$(BENCHMARKING)
+	-fno-rtti -fno-exceptions -nostdlib -lgcc -std=gnu++17 -I $(ETL_INCLUDE) -DBENCHMARKING=$(BENCHMARKING) \
+	$(IS_TRACK_A_CFLAG) $(DEBUG_PI_CFLAG)
 
 # -Wl,option tells g++ to pass 'option' to the linker with commas replaced by spaces
 # doing this rather than calling the linker ourselves simplifies the compilation procedure
@@ -49,10 +63,10 @@ $(OUTPUT)/kernel8.elf: $(OBJECTS) linker.ld
 	$(CXX) $(CFLAGS) $(filter-out %.ld, $^) -o $@ $(LDFLAGS)
 	@$(OBJDUMP) -d $(OUTPUT)/kernel8.elf | fgrep -q q0 && printf "\n***** WARNING: SIMD INSTRUCTIONS DETECTED! *****\n\n" || true
 
-$(OUTPUT)/%.o: %.cpp Makefile
+$(OUTPUT)/%.o: %.cpp Makefile doit.sh
 	$(CXX) $(CFLAGS) -MMD -MP -c $< -o $@
 
-$(OUTPUT)/%.o: %.S Makefile
+$(OUTPUT)/%.o: %.S Makefile doit.sh
 	$(CXX) $(CFLAGS) -MMD -MP -c $< -o $@
 
 -include $(DEPENDS)
