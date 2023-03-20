@@ -2,6 +2,7 @@
 #include "merklin.hpp"
 #include "user_syscall_typed.hpp"
 #include "ui.hpp"
+#include "utils.hpp"
 
 namespace trains {
 
@@ -11,13 +12,11 @@ void switch_task() {
   tid_t train_controller = MyParentTid();
 
   tid_t request_tid;
-  constexpr size_t buffer_size = 1 + sizeof(switch_cmd);
-  char buffer[buffer_size] = {0};
-  buffer[0] = static_cast<char>(tc_msg_header::SWITCH_CMD_PART_1);
-  switch_cmd *msg = (switch_cmd*)(buffer+1);
+  utils::enumed_class<tc_msg_header, switch_cmd> buffer;
+  buffer.header = tc_msg_header::SWITCH_CMD_PART_1;
 
   while (1) {
-    int request = ReceiveValue(request_tid, *msg);
+    int request = ReceiveValue(request_tid, buffer.data);
     if (request <= 0) continue;
     ReplyValue(request_tid, tc_reply::OK);
 
@@ -39,17 +38,14 @@ void reverse_task() {
   tid_t train_controller = MyParentTid();
 
   tid_t request_tid;
-  constexpr size_t buffer_size = 1 + sizeof(reverse_cmd);
-  char buffer[buffer_size] = {0};
-  
-  reverse_cmd *msg = (reverse_cmd*)(buffer+1);
+  utils::enumed_class<tc_msg_header, reverse_cmd> buffer;
 
   while (1) {
-    int request = ReceiveValue(request_tid, *msg);
+    int request = ReceiveValue(request_tid, buffer.data);
     if (request <= 0) continue;
     ReplyValue(request_tid, tc_reply::OK);
 
-    buffer[0] = static_cast<char>(tc_msg_header::REVERSE_CMD_PART_1);
+    buffer.header = tc_msg_header::REVERSE_CMD_PART_1;
 
     tc_reply reply;
     int replylen = SendValue(train_controller, buffer, reply);
@@ -58,10 +54,10 @@ void reverse_task() {
     if (replylen == 1 && reply == tc_reply::TRAIN_ALREADY_REVERSING) {
     } else {
       Delay(clock_server(), 300); // 3 seconds or 3000ms
-      buffer[0] = static_cast<char>(tc_msg_header::REVERSE_CMD_PART_2);
+      buffer.header = tc_msg_header::REVERSE_CMD_PART_2;
       SendValue(train_controller, buffer, null_reply);
       Delay(clock_server(), 100);
-      buffer[0] = static_cast<char>(tc_msg_header::REVERSE_CMD_PART_3);
+      buffer.header = tc_msg_header::REVERSE_CMD_PART_3;
       SendValue(train_controller, buffer, null_reply);
     }
   }
@@ -129,8 +125,8 @@ void sensor_task() {
 
   char sensor_bytes[10] = {0};
   // size_t num_sensors = 5 * 16;
-  char sensor_line_output[1 + 40];
-  sensor_line_output[0] = static_cast<char>(ui::display_msg_header::SENSOR_MSG);
+  utils::enumed_class<ui::display_msg_header, char[41]> sensor_line_output;
+  sensor_line_output.header = ui::display_msg_header::SENSOR_MSG;
 
   while (1) {
     int replylen = SendValue(train_controller, tc_msg_header::SENSOR_CMD, sensor_bytes);
@@ -157,8 +153,9 @@ void sensor_task() {
         ++module_char;
       }
 
-      size_t msg_len = 1 + sensor_buffer.fill_message(sensor_line_output+1);
-      SendValue(display_controller(), sensor_line_output, msg_len, null_reply);
+      size_t len = sensor_buffer.fill_message(sensor_line_output.data);
+      sensor_line_output.data[len] = '\0';
+      SendValue(display_controller(), sensor_line_output, null_reply);
     }
 
     Delay(clock_server(), 20); // 200ms
@@ -174,7 +171,7 @@ void train_controller_task() {
   Create(PRIORITY_L1, reverse_task);
 
   tid_t request_tid;
-  char message[128];
+  utils::enumed_class<tc_msg_header, char[128]> message {};
 
   int train_speeds[81];
   bool is_train_reversing[81];
@@ -195,10 +192,10 @@ void train_controller_task() {
     int request = ReceiveValue(request_tid, message);
     if (request <= 0) continue;
 
-    switch (static_cast<tc_msg_header>(message[0])) {
+    switch (message.header) {
       case tc_msg_header::REVERSE_CMD_PART_1: {
-        reverse_cmd* cmd = (reverse_cmd*)(message+1);
-        int train_num = cmd->train;
+        auto &cmd = message.data_as<reverse_cmd>();
+        int train_num = cmd.train;
 
         if (!is_train_reversing[train_num]) {
           Putc(merklin_tx(), 1, train_speeds[train_num] >= 16 ? 16 : 0);
@@ -211,8 +208,8 @@ void train_controller_task() {
         break;
       }
       case tc_msg_header::REVERSE_CMD_PART_2: {
-        reverse_cmd* cmd = (reverse_cmd*)(message+1);
-        int train_num = cmd->train;
+        auto &cmd = message.data_as<reverse_cmd>();
+        int train_num = cmd.train;
 
         Putc(merklin_tx(), 1, 15);
         Putc(merklin_tx(), 1, (char)train_num);
@@ -221,8 +218,8 @@ void train_controller_task() {
         break;
       }
       case tc_msg_header::REVERSE_CMD_PART_3: {
-        reverse_cmd* cmd = (reverse_cmd*)(message+1);
-        int train_num = cmd->train;
+        auto &cmd = message.data_as<reverse_cmd>();
+        int train_num = cmd.train;
 
         Putc(merklin_tx(), 1, train_speeds[train_num]);
         Putc(merklin_tx(), 1, (char)train_num);
@@ -239,13 +236,13 @@ void train_controller_task() {
         break;
       }
       case tc_msg_header::SWITCH_CMD_PART_1: {
-        switch_cmd* cmd = (switch_cmd*)(message+1);
-        if (switch_directions[cmd->switch_num] == cmd->switch_dir) {
+        auto &cmd = message.data_as<switch_cmd>();
+        if (switch_directions[cmd.switch_num] == cmd.switch_dir) {
           ReplyValue(request_tid, tc_reply::SWITCH_UNCHANGED);
         } else {
-          Putc(merklin_tx(), 1, (char)(cmd->switch_dir));
-          Putc(merklin_tx(), 1, (char)(cmd->switch_num));
-          switch_directions[cmd->switch_num] = cmd->switch_dir;
+          Putc(merklin_tx(), 1, (char)(cmd.switch_dir));
+          Putc(merklin_tx(), 1, (char)(cmd.switch_num));
+          switch_directions[cmd.switch_num] = cmd.switch_dir;
           ReplyValue(request_tid, tc_reply::OK);
         }
         break;
@@ -256,9 +253,9 @@ void train_controller_task() {
         break;
       }
       case tc_msg_header::SPEED: {
-        speed_cmd* cmd = (speed_cmd*)(message+1);
-        int speed = cmd->speed;
-        int train_num = cmd->train;
+        auto &cmd = message.data_as<speed_cmd>();
+        int speed = cmd.speed;
+        int train_num = cmd.train;
 
         if (!is_train_reversing[train_num]) {
           Putc(merklin_tx(), 1, (char)speed);

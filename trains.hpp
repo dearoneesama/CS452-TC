@@ -1,5 +1,7 @@
 #pragma once
 
+#include <cstdint>
+
 namespace trains {
 
 enum class tc_reply : char {
@@ -8,7 +10,7 @@ enum class tc_reply : char {
   SWITCH_UNCHANGED,
 };
 
-enum class tc_msg_header : char {
+enum class tc_msg_header : uint64_t {
   SPEED = 'd',
 
   REVERSE_CMD_PART_1 = 'r', // makes the train stop
@@ -35,7 +37,7 @@ enum class switch_dir_t : char {
   NONE = 0,
 };
 
-enum class special_cmd : char {
+enum class special_cmd : unsigned char {
   TURNOFF_SWITCH = 0x20,
   RESET_MODE = 0xC0,
   READ_SENSORS = 128 + 5,

@@ -5,8 +5,24 @@
 #include <iterator>
 
 namespace utils {
-void uint32_to_buffer(char* buffer, uint32_t n);
-uint32_t buffer_to_uint32(char* buffer);
+  void uint32_to_buffer(char* buffer, uint32_t n);
+  uint32_t buffer_to_uint32(char* buffer);
+
+  template<class EnumT, class ClsT>
+  struct enumed_class {
+    EnumT header;
+    ClsT data;
+    // NOTE: if sizeof(EnumT == 8) and sizeof(ClsT == 1) (eg char),
+    // then sizeof(enumed_class) is not necessarily 9!
+
+    template<class T>
+    auto &data_as() {
+      return *reinterpret_cast<T *>(&data);
+    }
+  };
+
+  template<class EnumT, class ClsT>
+  enumed_class(EnumT, ClsT) -> enumed_class<EnumT, ClsT>;
 }
 
 namespace troll {
