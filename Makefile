@@ -22,6 +22,12 @@ else
 	IS_TRACK_A_CFLAG+=-DIS_TRACK_A=0
 endif
 
+ifeq ($(NO_CTS), 1)
+	NO_CTS_CFLAG+=-DNO_CTS=1
+else
+	NO_CTS_CFLAG+=-DNO_CTS=0
+endif
+
 ifeq ($(DEBUG_PI), 1)
 	DEBUG_PI_CFLAG+=-DDEBUG_PI=1
 else
@@ -35,7 +41,7 @@ OPTLVL=-O3
 CFLAGS:= $(OPTLVL) -pipe -static $(WARNINGS) -ffreestanding -nostartfiles \
 	-mcpu=$(ARCH) -static-pie -mstrict-align -fno-builtin -mgeneral-regs-only \
 	-fno-rtti -fno-exceptions -nostdlib -lgcc -std=gnu++17 -I $(ETL_INCLUDE) -DBENCHMARKING=$(BENCHMARKING) \
-	$(IS_TRACK_A_CFLAG) $(DEBUG_PI_CFLAG)
+	$(IS_TRACK_A_CFLAG) $(NO_CTS_CFLAG) $(DEBUG_PI_CFLAG)
 
 # -Wl,option tells g++ to pass 'option' to the linker with commas replaced by spaces
 # doing this rather than calling the linker ourselves simplifies the compilation procedure

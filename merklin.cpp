@@ -14,7 +14,7 @@ void merklin_rxnotifer() {
   }
 }
 
-#if IS_TRACK_A
+#if NO_CTS
 // work around for track A
 void delay_notifier() {
   tid_t server = MyParentTid();
@@ -87,7 +87,7 @@ void merklin_txserver() {
   RegisterAs(MERK_TX_SERVER_NAME);
   tid_t tx_notifier = Create(priority_t::PRIORITY_L1, merklin_txnotifier);
 
-#if IS_TRACK_A
+#if NO_CTS
   tid_t d_notifier = Create(priority_t::PRIORITY_L2, delay_notifier);
   bool can_send = false;
 #else
@@ -106,7 +106,7 @@ void merklin_txserver() {
     if (request <= 0) continue;
 
     switch (message[0]) {
-#if IS_TRACK_A
+#if NO_CTS
       case 'd': { // delay
         can_send = true;
         break;
@@ -133,7 +133,7 @@ void merklin_txserver() {
       default: break;
     }
 
-#if IS_TRACK_A
+#if NO_CTS
     if (tx_up && can_send && !char_queue.empty()) {
       UartWriteRegister(1, rpi::UART_THR, char_queue.front());
       char_queue.pop();
