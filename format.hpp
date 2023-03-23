@@ -2,6 +2,7 @@
 
 #include <etl/to_string.h>
 #include <etl/queue.h>
+#include <etl/optional.h>
 
 // screen-printing utilities
 #define LEN_LITERAL(x) (sizeof(x) / sizeof(x[0]) - 1)
@@ -543,7 +544,7 @@ namespace troll {
       template<size_type I>
       void do_elem_row_(size_type titles) {
         char buf[content_padding + 1];
-        auto &it = std::get<I>(elem_its_.its);
+        auto &it = std::get<I>(*elem_its_);
         char *p = that_->elem_begins_[I];
         for (size_type elems = 0; elems < titles; ++it, ++elems) {
           auto sz = snformat(buf, content_padding + 1, "{}", *it);
@@ -558,10 +559,7 @@ namespace troll {
       tabulate *that_;
       typename title_row_args_type::title_it_type title_it_;
 
-      union opt_elem_its_t {
-        std::tuple<typename ElemRowArgs::elem_it_type...> its;
-        char null;
-      } elem_its_;
+      ::etl::optional<std::tuple<typename ElemRowArgs::elem_it_type...>> elem_its_;
 
       enum class state : char {
         top_line = 0,
@@ -577,18 +575,13 @@ namespace troll {
         : that_{tab}, title_it_{std::forward<T>(title_begin)}, elem_its_{std::forward<E>(elem_begins)}, state_{s} {}
     };
 
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wpedantic" // named initializer
     constexpr iterator begin() {
-      using elem = typename iterator::opt_elem_its_t;
-      return iterator{this, title_row_args_.begin, elem{.its=project_elem_its_(std::make_index_sequence<num_elem_row_args>{})}};
+      return iterator{this, title_row_args_.begin, project_elem_its_(std::make_index_sequence<num_elem_row_args>{})};
     }
 
     constexpr iterator end() {
-      using elem = typename iterator::opt_elem_its_t;
-      return iterator{this, title_row_args_.end, elem{.null=0}, iterator::state::end};
+      return iterator{this, title_row_args_.end, ::etl::nullopt, iterator::state::end};
     }
-#pragma GCC diagnostic pop
 
     /**
      * reset this object to use a new range of data.
