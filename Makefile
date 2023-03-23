@@ -40,7 +40,8 @@ BENCHMARKING=0
 OPTLVL=-O3
 CFLAGS:= $(OPTLVL) -pipe -static $(WARNINGS) -ffreestanding -nostartfiles \
 	-mcpu=$(ARCH) -static-pie -mstrict-align -fno-builtin -mgeneral-regs-only \
-	-fno-rtti -fno-exceptions -nostdlib -lgcc -std=gnu++17 -I $(ETL_INCLUDE) -DBENCHMARKING=$(BENCHMARKING) \
+	-fno-rtti -fno-exceptions -nostdlib -lgcc -fno-use-cxa-atexit -fno-threadsafe-statics -std=gnu++17 \
+	-isystem $(ETL_INCLUDE) -DBENCHMARKING=$(BENCHMARKING) \
 	$(IS_TRACK_A_CFLAG) $(NO_CTS_CFLAG) $(DEBUG_PI_CFLAG)
 
 # -Wl,option tells g++ to pass 'option' to the linker with commas replaced by spaces

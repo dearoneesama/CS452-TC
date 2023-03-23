@@ -1,3 +1,5 @@
+#include <etl/circular_buffer.h>
+#include <etl/fixed_iterator.h>
 #include "ui.hpp"
 #include "gtkterm.hpp"
 #include "kstddefs.hpp"
@@ -6,12 +8,6 @@
 #include "rpi.hpp"
 
 namespace ui {
-const size_t num_solenoids = 22;
-
-const char active_solenoids[] = {
-     1,    2,  3,  4,  5,  6,  7,  8,    9,   10,
-    11,   12, 13, 14, 15, 16, 17, 18, 0x99, 0x9A, // 153, 154
-  0x9B, 0x9C }; // 155, 156
 
 void display_controller_task() {
   using namespace troll;
@@ -22,7 +18,7 @@ void display_controller_task() {
   tid_t request_tid;
 
   // how many rows are reserved; 30th row (0-based) is the location for naive Putc
-  constexpr int user_rows = 30;
+  constexpr int user_rows = 44;
   OutputControl<150, user_rows> takeover;
 
   // headline
@@ -37,34 +33,108 @@ void display_controller_task() {
   );
   takeover.enqueue(0, 0, title_str.data());
 
+  constexpr int col_offset = 1;
+
   // switch table
-  constexpr size_t num_switches = 22;
-  int switch_table_titles[num_switches] = {
-    1, 2, 3, 4, 5, 6, 7, 8, 9, 10,
-    11, 12, 13, 14, 15, 16, 17, 18,
-    153, 154, 155, 156
-  };
-  char switch_table_values[num_switches] = {
-    '?', '?', '?', '?', '?', '?', '?', '?', '?', '?',
-    '?', '?', '?', '?', '?', '?', '?', '?',
-    '?', '?', '?', '?', 
-  };
-  auto switch_tab = make_tabulate<num_switches / 2, 9, 4>(
-    static_ansi_style_options_none,
+  char switch_table_val_dummy[1] = {'?'};
+  auto switch_tab = make_tabulate<tracks::num_switches / 2, 9, 6>(
+    static_ansi_style_options<ansi_font::dim>{},
     tabulate_title_row_args{
-      "Switch", switch_table_titles, switch_table_titles + num_switches,
+      "Switch", tracks::valid_switches().begin(), tracks::valid_switches().end(),
       static_ansi_style_options<ansi_font::bold>{}, static_ansi_style_options_none
     },
     tabulate_elem_row_args{
-      "Dir", switch_table_values,
+      "Dir", ::etl::fixed_iterator<char *>(switch_table_val_dummy),
       static_ansi_style_options<ansi_font::bold>{}, static_ansi_style_options_none
     }
   );
-  size_t row = 4;
+  constexpr size_t switch_table_row = 5;
+  size_t row = switch_table_row;
   for (auto sv : switch_tab) {
-    takeover.enqueue(row++, 0, sv.data());
+    takeover.enqueue(row++, col_offset, sv.data());
   }
-  size_t switch_end = row;
+
+  // sensor reads
+  ::etl::circular_buffer<sensor_read, 12> sensor_reads;
+  auto sensor_read_title_it = troll::it_transform(
+    sensor_reads.rbegin(), sensor_reads.rend(),
+    [](sensor_read const &sr) { return sr.sensor; }
+  );
+  auto sensor_read_tick_it = troll::it_transform(
+    sensor_reads.rbegin(), sensor_reads.rend(),
+    [](sensor_read const &sr) { return sr.tick; }
+  );
+  auto sensor_tab = make_tabulate<6, 9, 11>(
+    static_ansi_style_options<ansi_font::dim>{},
+    tabulate_title_row_args{
+      "Sensor", sensor_read_title_it.begin(), sensor_read_title_it.end(),
+      static_ansi_style_options<ansi_font::bold>{}, static_ansi_style_options_none
+    },
+    tabulate_elem_row_args{
+      "Tick", sensor_read_tick_it.begin(),
+      static_ansi_style_options<ansi_font::bold>{}, static_ansi_style_options_none
+    }
+  );
+  constexpr size_t sensor_table_row = 15;
+  row = sensor_table_row;
+  for (auto sv : sensor_tab) {
+    takeover.enqueue(row++, col_offset, sv.data());
+  }
+
+  // train reads
+  auto &valid_trains = tracks::valid_trains();
+  using vt_type = std::remove_reference_t<decltype(valid_trains)>;
+  //
+  int train_read_int_dummy[1] = {0};
+  ::etl::string<11> train_read_str_dummy[1] = {"?"};
+  ::etl::fixed_iterator<int *> train_read_int_it_dummy {train_read_int_dummy};
+  ::etl::fixed_iterator<::etl::string<11> *> train_read_str_it_dummy {train_read_str_dummy};
+
+  auto train_tab = make_tabulate<vt_type::SIZE, 9, 11>(
+    static_ansi_style_options<ansi_font::dim>{},
+    tabulate_title_row_args{
+      "Train", valid_trains.begin(), valid_trains.end(),
+      static_ansi_style_options<ansi_font::bold>{}, static_ansi_style_options_none
+    },
+    tabulate_elem_row_args{
+      "Cmd", train_read_int_it_dummy,
+      static_ansi_style_options<ansi_font::bold>{}, static_ansi_style_options_none
+    },
+    tabulate_elem_row_args{
+      "Dest.", train_read_str_it_dummy,
+      static_ansi_style_options<ansi_font::bold>{}, static_ansi_style_options_none
+    },
+    tabulate_elem_row_args{
+      "Speed", train_read_int_it_dummy,
+      static_ansi_style_options<ansi_font::bold>{}, static_ansi_style_options_none
+    },
+    tabulate_elem_row_args{
+      "Pos.", train_read_str_it_dummy,
+      static_ansi_style_options<ansi_font::bold>{}, static_ansi_style_options_none
+    },
+    tabulate_elem_row_args{
+      "dt", train_read_int_it_dummy,
+      static_ansi_style_options<ansi_font::bold>{}, static_ansi_style_options_none
+    },
+    tabulate_elem_row_args{
+      "dd", train_read_int_it_dummy,
+      static_ansi_style_options<ansi_font::bold>{}, static_ansi_style_options_none
+    }
+  );
+  constexpr size_t train_table_row = 25;
+  row = train_table_row;
+  for (auto sv : train_tab) {
+    takeover.enqueue(row++, col_offset, sv.data());
+  }
+
+  auto get_train_patch_idx = [&valid_trains](train_read const &tr) {
+    auto it = std::find(valid_trains.begin(), valid_trains.end(), tr.num);
+    return it - valid_trains.begin();
+  };
+
+  auto stringify_pos = [](tracks::position_t const &pos) {
+    return sformat<11>("{}+{}", pos.name.size() ? pos.name.data() : "?", pos.offset);
+  };
 
   // notice
   takeover.enqueue(user_rows - 2, 0, "| ");
@@ -95,7 +165,7 @@ void display_controller_task() {
           time.seconds,
           time.hundred_ms
         );
-        takeover.enqueue(1, 0, str.data());
+        takeover.enqueue(2, col_offset, str.data());
         ReplyValue(request_tid, reply);
         break;
       }
@@ -107,32 +177,51 @@ void display_controller_task() {
           percentages.user,
           percentages.idle
         ), padding::left);
-        takeover.enqueue(2, 0, str.data());
+        takeover.enqueue(3, col_offset, str.data());
         ReplyValue(request_tid, reply);
         break;
       }
       case display_msg_header::SWITCHES: { // we assume that only changing active switches will go through here
-        auto &cmd = message.data_as<trains::switch_cmd>();
+        auto &cmd = message.data_as<ui::switch_read>();
         char dir = cmd.switch_dir == trains::switch_dir_t::C ? 'C' : 'S';
         int switch_num = cmd.switch_num;
         int offset = switch_num <= 18 ? 1 : 135;
-        switch_table_values[switch_num - offset] = dir;
         // patch table
         auto [row, col, patch] = switch_tab.patch_str<1>(switch_num - offset, dir);
-        takeover.enqueue(row + 4, col, patch.data());
+        takeover.enqueue(row + switch_table_row, col + col_offset, patch.data());
         ReplyValue(request_tid, reply);
         break;
       }
       case display_msg_header::SENSOR_MSG: { // sensors
-        using style = static_ansi_style_options<ansi_font::bold>;
-        auto str = sformat<sizeof message + style::wrapper_str_size + 10>(
-          "{}Sensors:{} {}",
-          style::enabler_str(),
-          style::disabler_str(),
-          message.data
-        );
-        takeover.enqueue(switch_end + 1, 0, str.data());
+        sensor_reads.push(message.data_as<sensor_read>());
+        // redraw table
+        sensor_read_title_it.reset_src_iterator(sensor_reads.rbegin(), sensor_reads.rend());
+        sensor_read_tick_it.reset_src_iterator(sensor_reads.rbegin(), sensor_reads.rend());
+        sensor_tab.reset_src_iterator(sensor_read_title_it.begin(), sensor_read_title_it.end(), sensor_read_tick_it.begin());
+        row = sensor_table_row;
+        for (auto sv : sensor_tab) {
+          takeover.enqueue(row++, col_offset, sv.data());
+        }
         ReplyValue(request_tid, reply);
+        break;
+      }
+      case display_msg_header::TRAIN_READ: { // train status update
+        ReplyValue(request_tid, null_reply);
+        auto &tr = message.data_as<train_read>();
+        auto idx = get_train_patch_idx(tr);
+        // patch the table
+        auto [row1, col1, patch1] = train_tab.patch_str<1>(idx, tr.cmd);
+        takeover.enqueue(row1 + train_table_row, col1 + col_offset, patch1.data());
+        auto [row2, col2, patch2] = train_tab.patch_str<2>(idx, stringify_pos(tr.dest));
+        takeover.enqueue(row2 + train_table_row, col2 + col_offset, patch2.data());
+        auto [row3, col3, patch3] = train_tab.patch_str<3>(idx, tr.speed);
+        takeover.enqueue(row3 + train_table_row, col3 + col_offset, patch3.data());
+        auto [row4, col4, patch4] = train_tab.patch_str<4>(idx, stringify_pos(tr.pos));
+        takeover.enqueue(row4 + train_table_row, col4 + col_offset, patch4.data());
+        auto [row5, col5, patch5] = train_tab.patch_str<5>(idx, tr.delta_t);
+        takeover.enqueue(row5 + train_table_row, col5 + col_offset, patch5.data());
+        auto [row6, col6, patch6] = train_tab.patch_str<6>(idx, tr.delta_d);
+        takeover.enqueue(row6 + train_table_row, col6 + col_offset, patch6.data());
         break;
       }
       case display_msg_header::USER_INPUT: { // user input
@@ -180,13 +269,15 @@ void command_controller_task() {
   trains::tc_reply reply;
 
   auto is_valid_train = [](int arg) {
-    return 1 <= arg && arg <= 80;
+    auto &vt = tracks::valid_trains();
+    return std::find(vt.begin(), vt.end(), arg) != vt.end();
   };
   auto is_valid_speed = [](int arg) {
     return (0 <= arg && arg <= 14) || (16 <= arg && arg <= 30);
   };
   auto is_valid_solenoid = [](int arg) {
-    return 0 <= arg && arg <= 255;
+    auto &vs = tracks::valid_switches();
+    return std::find(vs.begin(), vs.end(), arg) != vs.end();
   };
   auto is_valid_solenoid_dir = [](int arg) {
     return arg == 'S' || arg == 'C';
@@ -217,6 +308,7 @@ void command_controller_task() {
        *   tr [1-80] [0-14 or 16-30]
        *   rv [1-80]
        *   sw [0-255] (S|C)
+       *   st
        */
       if (troll::sscan(command_buffer.data, curr_size, "tr {} {}", arg1, arg2)) {
         if (is_valid_train(arg1) && is_valid_speed(arg2)) {
@@ -237,18 +329,20 @@ void command_controller_task() {
         }
       } else if (troll::sscan(command_buffer.data, curr_size, "sw {} {}", arg1, char_arg)) {
         if (is_valid_solenoid(arg1) && is_valid_solenoid_dir(char_arg)) {
-          // filter out the solenoids that are not even on the track
-          for (size_t i = 0; i < num_solenoids; ++i) {
-            if (arg1 == active_solenoids[i]) {
-              switch_cmd_msg.data.switch_num = arg1;
-              switch_cmd_msg.data.switch_dir = char_arg == 'S' ? trains::switch_dir_t::S : trains::switch_dir_t::C;
-              int replylen = SendValue(switch_task(), switch_cmd_msg.data, reply);
-              if (replylen == 1 && reply == trains::tc_reply::OK) {
-                SendValue(display_controller(), switch_cmd_msg, reply);
-                valid = true;
-              }
-              break;
-            }
+          switch_cmd_msg.data.switch_num = arg1;
+          switch_cmd_msg.data.switch_dir = char_arg == 'S' ? trains::switch_dir_t::S : trains::switch_dir_t::C;
+          int replylen = SendValue(switch_task(), switch_cmd_msg.data, reply);
+          valid = replylen == 1 && reply == trains::tc_reply::OK;
+        }
+      } else if (troll::sscan(command_buffer.data, curr_size, "st")) {
+        valid = true;
+        for (auto train : tracks::valid_trains()) {
+          speed_cmd_msg.data.train = train;
+          speed_cmd_msg.data.speed = 0;
+          int replylen = SendValue(train_controller(), speed_cmd_msg, reply);
+          if (replylen != 1 || reply != trains::tc_reply::OK) {
+            valid = false;
+            break;
           }
         }
       } else if (curr_size == 1 && command_buffer.data[0] == 'q') {
@@ -351,7 +445,6 @@ void idle_task() {
 }
 
 void initialize() {
-  auto display_controller = TaskFinder(DISPLAY_CONTROLLER_NAME);
   auto train_controller = TaskFinder(trains::TRAIN_CONTROLLER_NAME);
   auto switch_task = TaskFinder(trains::SWITCH_TASK_NAME);
 
@@ -360,13 +453,13 @@ void initialize() {
   trains::tc_reply reply;
   int replylen = SendValue(train_controller(), trains::tc_msg_header::GO_CMD, reply);
   if (replylen != 1 || reply != trains::tc_reply::OK) {
-    DEBUG_LITERAL("Could not send GO command\r\n");
+    send_notice("Could not send GO command\r\n");
     return;
   }
 
   replylen = SendValue(train_controller(), trains::tc_msg_header::SET_RESET_MODE, reply);
   if (replylen != 1 || reply != trains::tc_reply::OK) {
-    DEBUG_LITERAL("Could not send RESET MODE command\r\n");
+    send_notice("Could not send RESET MODE command\r\n");
     return;
   }
 
@@ -374,25 +467,25 @@ void initialize() {
   speed_cmd_msg.header = trains::tc_msg_header::SPEED;
   speed_cmd_msg.data.speed = 16;
 
-  for (int train = 1; train <= 80; ++train) {
+  for (auto train : tracks::valid_trains()) {
     speed_cmd_msg.data.train = train;
     SendValue(train_controller(), speed_cmd_msg, reply);
     if (replylen != 1 || reply != trains::tc_reply::OK) {
-      DEBUG_LITERAL("Could not send SPEED command\r\n");
+      send_notice("Could not send SPEED command");
+      return;
     }
   }
 
   utils::enumed_class<display_msg_header, trains::switch_cmd> switch_cmd_msg;
   switch_cmd_msg.header = display_msg_header::SWITCHES;
 
-  for (size_t i = 0; i < num_solenoids; ++i) {
-    switch_cmd_msg.data.switch_num = active_solenoids[i];
+  for (auto sw : tracks::valid_switches()) {
+    switch_cmd_msg.data.switch_num = sw;
     switch_cmd_msg.data.switch_dir = trains::switch_dir_t::C;
     replylen = SendValue(switch_task(), switch_cmd_msg.data, reply);
-    if (replylen == 1 && reply == trains::tc_reply::OK) {
-      SendValue(display_controller(), switch_cmd_msg, reply);
-    } else {
-      DEBUG_LITERAL("Could not send SWITCH command\r\n");
+    if (replylen != 1 || reply != trains::tc_reply::OK) {
+      send_notice("Could not send SWITCH command");
+      return;
     }
   }
 

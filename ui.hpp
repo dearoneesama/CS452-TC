@@ -4,6 +4,7 @@
 #include "user_syscall_typed.hpp"
 #include "format.hpp"
 #include "utils.hpp"
+#include "tracks.hpp"
 
 namespace ui {
 
@@ -16,6 +17,7 @@ enum class display_msg_header : uint64_t {
   USER_NOTICE = 's',
   TIMER_CLOCK_MSG = 't',
   SWITCHES = 'w',
+  TRAIN_READ,
 };
 
 struct timer_clock_t {
@@ -29,6 +31,15 @@ struct time_percentage_t {
   uint32_t kernel;
   uint32_t user;
   uint32_t idle;
+};
+
+using sensor_read = tracks::sensor_read;
+using switch_read = tracks::switch_cmd;
+
+struct train_read {
+  int num, cmd;
+  tracks::position_t dest, pos;
+  int speed, delta_t, delta_d;
 };
 
 const char * const DISPLAY_CONTROLLER_NAME = "displayc";

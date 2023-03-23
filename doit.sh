@@ -10,7 +10,7 @@ if [ $TARGET == "CS017541" ]; then
     DEBUG_PI=0
 elif [ $TARGET == "CS017540" ]; then
     IS_TRACK_A=1
-    NO_CTS=1
+    NO_CTS=0
     DEBUG_PI=0
 else
     IS_TRACK_A=0

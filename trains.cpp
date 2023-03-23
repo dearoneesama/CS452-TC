@@ -63,73 +63,33 @@ void reverse_task() {
   }
 }
 
-class circular_buffer {
-public:
-  void add(char c) {
-    buffer_[next_index_] = c;
-    next_index_ = (next_index_ + 1) & (127);
-    if (size_ != 128) {
-      ++size_;
-    }
-  }
-
-  size_t size() const {
-    return size_;
-  }
-
-  // requires 0 <= i < 128
-  char most_recent_at(size_t i) const {
-    if (size_ == 128) {
-      return buffer_[(next_index_ + size_ - 1 - i) & (127)];
-    }
-    return buffer_[next_index_ - 1 - i];
-  }
-
-private:
-  char buffer_[128];
-  size_t next_index_ = 0;
-  size_t size_ = 0;
-};
-
-class sensor_buffer_t {
-public:
-  void add(char module, char contact) {
-    modules_.add(module);
-    contacts_.add(contact);
-  }
-
-  size_t fill_message(char *message) {
-    size_t num_sensors = modules_.size() > 10 ? 10 : modules_.size();
-    for (size_t i = 0; i < num_sensors; ++i) {
-      char sensor_module = modules_.most_recent_at(i);
-      char sensor_contact = contacts_.most_recent_at(i);
-      *(message++) = sensor_module;
-      *(message++) = '0' + (sensor_contact >= 10 ? 1 : 0);
-      *(message++) = '0' + (sensor_contact % 10);
-      *(message++) = ' ';
-    }
-    return 4 * num_sensors;
-  }
-
-private:
-  circular_buffer modules_;
-  circular_buffer contacts_;
-};
-
 void sensor_task() {
   RegisterAs(SENSOR_TASK_NAME);
+  auto track_task = TaskFinder(tracks::TRACK_SERVER_TASK_NAME);
   auto clock_server = TaskFinder("clock_server");
   tid_t train_controller = MyParentTid();
-  auto display_controller = TaskFinder(ui::DISPLAY_CONTROLLER_NAME);
-  sensor_buffer_t sensor_buffer{};
+
+  auto send_sensor = [&track_task] (int tick, char module_char, int offset) {
+    utils::enumed_class<tracks::track_msg_header, tracks::sensor_read> sensor_msg;
+    sensor_msg.header = tracks::track_msg_header::SENSOR_READ;
+    sensor_msg.data.sensor[0] = module_char;
+    if (offset < 10) {
+      sensor_msg.data.sensor[1] = '0' + offset;
+      sensor_msg.data.sensor.uninitialized_resize(2);
+      } else {
+      sensor_msg.data.sensor[1] = '0' + offset / 10;
+      sensor_msg.data.sensor[2] = '0' + offset % 10;
+      sensor_msg.data.sensor.uninitialized_resize(3);
+    }
+    sensor_msg.data.tick = tick;
+    SendValue(track_task(), sensor_msg, null_reply);
+  };
 
   char sensor_bytes[10] = {0};
-  // size_t num_sensors = 5 * 16;
-  utils::enumed_class<ui::display_msg_header, char[41]> sensor_line_output;
-  sensor_line_output.header = ui::display_msg_header::SENSOR_MSG;
 
   while (1) {
     int replylen = SendValue(train_controller, tc_msg_header::SENSOR_CMD, sensor_bytes);
+    int tick = Time(clock_server());
     if (replylen == 10) {
       char contact_1_8, contact_9_16;
       size_t idx = 0;
@@ -141,24 +101,20 @@ void sensor_task() {
 
         for (i = 0; i < 8; ++i) {
           if (((contact_1_8 >> i) & 1) == 1) {
-            sensor_buffer.add(module_char, 8 - i);
+            send_sensor(tick, module_char, 8 - i);
           }
         }
 
         for (i = 0; i < 8; ++i) {
           if (((contact_9_16 >> i) & 1) == 1) {
-            sensor_buffer.add(module_char, 16 - i);
+            send_sensor(tick, module_char, 16 - i);
           }
         }
         ++module_char;
       }
-
-      size_t len = sensor_buffer.fill_message(sensor_line_output.data);
-      sensor_line_output.data[len] = '\0';
-      SendValue(display_controller(), sensor_line_output, null_reply);
     }
 
-    Delay(clock_server(), 20); // 200ms
+    Delay(clock_server(), 10); // 100ms
   }
 }
 
@@ -166,6 +122,8 @@ void train_controller_task() {
   RegisterAs(TRAIN_CONTROLLER_NAME);
   auto merklin_tx = TaskFinder(merklin::MERK_TX_SERVER_NAME);
   auto merklin_rx = TaskFinder(merklin::MERK_RX_SERVER_NAME);
+  auto track_task = TaskFinder(tracks::TRACK_SERVER_TASK_NAME);
+
   Create(PRIORITY_L1, sensor_task);
   Create(PRIORITY_L1, switch_task);
   Create(PRIORITY_L1, reverse_task);
@@ -173,6 +131,7 @@ void train_controller_task() {
   tid_t request_tid;
   utils::enumed_class<tc_msg_header, char[128]> message {};
 
+  // TODO: get rid of this
   int train_speeds[81];
   bool is_train_reversing[81];
 
@@ -186,7 +145,16 @@ void train_controller_task() {
     switch_directions[i] = switch_dir_t::NONE;
   }
 
-  char sensor_bytes[10];
+  auto send_train_speed = [&train_speeds, &merklin_tx, &track_task] (int train_num, int speed) {
+    Putc(merklin_tx(), 1, (char)speed);
+    Putc(merklin_tx(), 1, (char)train_num);
+
+    utils::enumed_class track_msg {
+      tracks::track_msg_header::TRAIN_SPEED_CMD,
+      tracks::speed_cmd { train_num, speed },
+    };
+    SendValue(track_task(), track_msg, null_reply);
+  };
 
   while (1) {
     int request = ReceiveValue(request_tid, message);
@@ -198,8 +166,7 @@ void train_controller_task() {
         int train_num = cmd.train;
 
         if (!is_train_reversing[train_num]) {
-          Putc(merklin_tx(), 1, train_speeds[train_num] >= 16 ? 16 : 0);
-          Putc(merklin_tx(), 1, (char)train_num);
+          send_train_speed(train_num, train_speeds[train_num] >= 16 ? 16 : 0);
           ReplyValue(request_tid, tc_reply::OK);
           is_train_reversing[train_num] = true;
         } else {
@@ -211,8 +178,7 @@ void train_controller_task() {
         auto &cmd = message.data_as<reverse_cmd>();
         int train_num = cmd.train;
 
-        Putc(merklin_tx(), 1, 15);
-        Putc(merklin_tx(), 1, (char)train_num);
+        send_train_speed(train_num, 15);
 
         ReplyValue(request_tid, tc_reply::OK);
         break;
@@ -221,13 +187,13 @@ void train_controller_task() {
         auto &cmd = message.data_as<reverse_cmd>();
         int train_num = cmd.train;
 
-        Putc(merklin_tx(), 1, train_speeds[train_num]);
-        Putc(merklin_tx(), 1, (char)train_num);
+        send_train_speed(train_num, train_speeds[train_num]);
         is_train_reversing[train_num] = false;
         ReplyValue(request_tid, tc_reply::OK);
         break;
       }
       case tc_msg_header::SENSOR_CMD: {
+        char sensor_bytes[10];
         Putc(merklin_tx(), 1, static_cast<char>(special_cmd::READ_SENSORS));
         for (int i = 0; i < 10; ++i) {
           sensor_bytes[i] = Getc(merklin_rx(), 1);
@@ -243,6 +209,12 @@ void train_controller_task() {
           Putc(merklin_tx(), 1, (char)(cmd.switch_dir));
           Putc(merklin_tx(), 1, (char)(cmd.switch_num));
           switch_directions[cmd.switch_num] = cmd.switch_dir;
+          //
+          SendValue(track_task(), utils::enumed_class {
+            tracks::track_msg_header::SWITCH_CMD,
+            tracks::switch_cmd { cmd.switch_num, cmd.switch_dir },
+          }, null_reply);
+
           ReplyValue(request_tid, tc_reply::OK);
         }
         break;
@@ -258,8 +230,7 @@ void train_controller_task() {
         int train_num = cmd.train;
 
         if (!is_train_reversing[train_num]) {
-          Putc(merklin_tx(), 1, (char)speed);
-          Putc(merklin_tx(), 1, (char)train_num);
+          send_train_speed(train_num, speed);
           train_speeds[train_num] = speed;
           ReplyValue(request_tid, tc_reply::OK);
         } else {

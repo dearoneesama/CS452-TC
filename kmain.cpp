@@ -15,6 +15,8 @@ void initialize() {
     ;
 }
 
+extern "C" int atexit(void (*)(void)) { return 0; }
+
 // bits[0:24] hold N in svc N
 #define ESR_MASK 0x1FFFFFF
 

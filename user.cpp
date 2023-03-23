@@ -10,6 +10,7 @@
 #include "merklin.hpp"
 #include "gtkterm.hpp"
 #include "trains.hpp"
+#include "tracks.hpp"
 
 namespace k1 {
 
@@ -430,6 +431,7 @@ void first_user_task() {
   Create(priority_t::PRIORITY_L1, clocknotifier);
   gtkterm::init_tasks();
   merklin::init_tasks();
+  tracks::init_tasks();
   trains::init_tasks();
   ui::init_tasks();
 }
