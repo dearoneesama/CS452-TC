@@ -2,11 +2,12 @@ CXX:=g++
 OUTPUT:=build
 
 ETL_INCLUDE:=../thirdparty/etl/include
+FPM_INCLUDE:=../thirdparty/fpm/include
 CATCH_DIR:=../thirdparty/Catch2/extras
 
 WARNINGS=-Wall -Wextra -Wpedantic -Wno-unused-const-variable
 CFLAGS_LIB:=-g -pipe -static -fno-builtin \
-	-fno-rtti -fno-exceptions -std=gnu++17 -I $(ETL_INCLUDE) \
+	-fno-rtti -fno-exceptions -std=gnu++17 -I $(ETL_INCLUDE) -I $(FPM_INCLUDE) \
 	-Wno-return-type -I $(CATCH_DIR)
 CFLAGS:=$(CFLAGS_LIB) $(WARNINGS)
 

@@ -10,6 +10,7 @@ TEST_CASE("sformat usage", "[format]") {
   REQUIRE(troll::snformat(s, "abc {} de {} {}{} yolo", 12, -44, 7, "hehe") == 24);
   REQUIRE(etl::string_view{s} == "abc 12 de -44 7hehe yolo");
   REQUIRE(troll::sformat<50>("abc {} a {} ", 12, 'b') == "abc 12 a b ");
+  REQUIRE(troll::sformat<50>("{} and {} {}", fpm::fixed_16_16{1} / 4 * 3, fpm::fixed_16_16{-13} / 3, fpm::fixed_16_16{}) == "0.75 and -4.33 0.00");
 
   SECTION("no overflow") {
     char s[11];

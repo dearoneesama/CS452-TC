@@ -16,6 +16,7 @@ void initialize() {
 }
 
 extern "C" int atexit(void (*)(void)) { return 0; }
+extern "C" void __assert_func(const char *, int, const char *, const char *) { __builtin_unreachable(); }
 
 // bits[0:24] hold N in svc N
 #define ESR_MASK 0x1FFFFFF
