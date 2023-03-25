@@ -131,8 +131,8 @@ void gtkterm_txserver() {
 }
 
 void init_tasks() {
-  Create(priority_t::PRIORITY_L1, gtkterm_txserver);
-  Create(priority_t::PRIORITY_L1, gtkterm_rxserver);
+  Create(priority_t::PRIORITY_L4, gtkterm_txserver);
+  Create(priority_t::PRIORITY_L4, gtkterm_rxserver);
 }
 
 }

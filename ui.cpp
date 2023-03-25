@@ -498,12 +498,12 @@ void initialize() {
 }
 
 void init_tasks() {
-  Create(priority_t::PRIORITY_L1, display_controller_task);
-  Create(priority_t::PRIORITY_L1, command_controller_task);
-  Create(priority_t::PRIORITY_L2, timer_task);
+  Create(priority_t::PRIORITY_L4, display_controller_task);
+  Create(priority_t::PRIORITY_L4, command_controller_task);
+  Create(priority_t::PRIORITY_L5, timer_task);
   Create(priority_t::PRIORITY_IDLE, idle_task);
 
-  Create(priority_t::PRIORITY_L1, initialize);
+  Create(priority_t::PRIORITY_L5, initialize);
 }
 
 }

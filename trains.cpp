@@ -124,9 +124,9 @@ void train_controller_task() {
   auto merklin_rx = TaskFinder(merklin::MERK_RX_SERVER_NAME);
   auto track_task = TaskFinder(tracks::TRACK_SERVER_TASK_NAME);
 
-  Create(PRIORITY_L1, sensor_task);
-  Create(PRIORITY_L1, switch_task);
-  Create(PRIORITY_L1, reverse_task);
+  Create(PRIORITY_L2, sensor_task);
+  Create(PRIORITY_L2, switch_task);
+  Create(PRIORITY_L2, reverse_task);
 
   tid_t request_tid;
   utils::enumed_class<tc_msg_header, char[128]> message {};
