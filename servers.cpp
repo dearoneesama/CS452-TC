@@ -171,53 +171,50 @@ void clockserver() {
   // tid -> target tick
   etl::unordered_map<tid_t, uint32_t, MAX_NUM_TASKS> delays;
 
-  constexpr char buffer_length = 5;
-  char buffer[buffer_length];
+  utils::enumed_class<CLOCK_MESSAGE, uint32_t> message;
 
   tid_t request_tid;
   while (1) {
-    int request = ReceiveValue(request_tid, buffer);
+    int request = ReceiveValue(request_tid, message);
     if (request <= 0) continue;
-    switch (static_cast<CLOCK_MESSAGE>(buffer[0])) {
+    switch (message.header) {
       case CLOCK_MESSAGE::TIME: {
-        buffer[0] = static_cast<char>(CLOCK_REPLY::TIME_OK);
-        utils::uint32_to_buffer(buffer + 1, ticks_in_10ms);
-        ReplyValue(request_tid, buffer);
+        ReplyValue(request_tid, utils::enumed_class {
+          CLOCK_REPLY::TIME_OK,
+          ticks_in_10ms,
+        });
         break;
       }
       case CLOCK_MESSAGE::DELAY: {
-        uint32_t delay = utils::buffer_to_uint32(buffer + 1);
+        uint32_t delay = message.data;
         if (delay > 0) {
           delays[request_tid] = delay;
         } else {
-          buffer[0] = static_cast<char>(CLOCK_REPLY::DELAY_OK);
-          utils::uint32_to_buffer(buffer + 1, ticks_in_10ms);
-          ReplyValue(request_tid, buffer);
+          ReplyValue(request_tid, utils::enumed_class {
+            CLOCK_REPLY::DELAY_OK,
+            ticks_in_10ms,
+          });
         }
         break;
       }
       case CLOCK_MESSAGE::DELAY_UNTIL: {
-        uint32_t delay_until = utils::buffer_to_uint32(buffer + 1);
+        uint32_t delay_until = message.data;
         int delay = delay_until - ticks_in_10ms;
         if (delay > 0) {
           delays[request_tid] = delay;
         } else if (delay == 0) {
-          buffer[0] = static_cast<char>(CLOCK_REPLY::DELAY_OK);
-          utils::uint32_to_buffer(buffer + 1, ticks_in_10ms);
-          ReplyValue(request_tid, buffer);
+          ReplyValue(request_tid, utils::enumed_class {
+            CLOCK_REPLY::DELAY_OK,
+            ticks_in_10ms,
+          });
         } else {
-          buffer[0] = static_cast<char>(CLOCK_REPLY::DELAY_NEGATIVE);
-          ReplyValue(request_tid, buffer, 1);
+          ReplyValue(request_tid, CLOCK_REPLY::DELAY_NEGATIVE);
         }
         break;
       }
       case CLOCK_MESSAGE::NOTIFY: {
         ++ticks_in_10ms;
-        buffer[0] = static_cast<char>(CLOCK_REPLY::NOTIFY_OK);
-        ReplyValue(request_tid, buffer, 1);
-
-        buffer[0] = static_cast<char>(CLOCK_REPLY::DELAY_OK);
-        utils::uint32_to_buffer(buffer + 1, ticks_in_10ms);
+        ReplyValue(request_tid, CLOCK_REPLY::NOTIFY_OK);
 
         // instead of removing them from the map, simply assume that
         // delay == 0 means a null state
@@ -227,7 +224,10 @@ void clockserver() {
           }
           delays[tid] -= 1;
           if (delays[tid] == 0) {
-            ReplyValue(tid, buffer);
+            ReplyValue(tid, utils::enumed_class {
+              CLOCK_REPLY::DELAY_OK,
+              ticks_in_10ms,
+            });
           }
         }
         break;

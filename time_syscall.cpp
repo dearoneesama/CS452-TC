@@ -4,38 +4,40 @@
 #include "servers.hpp"
 
 int Time(int tid) {
-  char buffer[5];
-  int replylen = SendValue(tid, CLOCK_MESSAGE::TIME, buffer);
-  if (replylen != 5 || buffer[0] != static_cast<char>(CLOCK_REPLY::TIME_OK)) {
+  utils::enumed_class<CLOCK_REPLY, uint32_t> reply;
+  int replylen = SendValue(tid, CLOCK_MESSAGE::TIME, reply);
+  if (replylen < 1 || reply.header != CLOCK_REPLY::TIME_OK) {
     return -1;
   }
-  return utils::buffer_to_uint32(buffer + 1);
+  return reply.data;
 }
 
 int Delay(int tid, int ticks) {
   if (ticks < 0) {
     return -2;
   }
-  char buffer[5];
-  buffer[0] = static_cast<char>(CLOCK_MESSAGE::DELAY);
-  utils::uint32_to_buffer(buffer + 1, ticks);
-  int replylen = SendValue(tid, buffer, buffer);
-  if (replylen != 5 || buffer[0] != static_cast<char>(CLOCK_REPLY::DELAY_OK)) {
+  utils::enumed_class<CLOCK_REPLY, uint32_t> reply;
+  int replylen = SendValue(tid, utils::enumed_class {
+    CLOCK_MESSAGE::DELAY,
+    static_cast<uint32_t>(ticks),
+  }, reply);
+  if (replylen < 1 || reply.header != CLOCK_REPLY::DELAY_OK) {
     return -1;
   }
-  return utils::buffer_to_uint32(buffer + 1);
+  return reply.data;
 }
 
 int DelayUntil(int tid, int ticks) {
-  char buffer[5];
-  buffer[0] = static_cast<char>(CLOCK_MESSAGE::DELAY_UNTIL);
-  utils::uint32_to_buffer(buffer + 1, ticks);
-  int replylen = SendValue(tid, buffer, buffer);
-  if (replylen > 0 && buffer[0] == static_cast<char>(CLOCK_REPLY::DELAY_NEGATIVE)) {
+  utils::enumed_class<CLOCK_REPLY, uint32_t> reply;
+  int replylen = SendValue(tid, utils::enumed_class {
+    CLOCK_MESSAGE::DELAY_UNTIL,
+    static_cast<uint32_t>(ticks),
+  }, reply);
+  if (replylen > 0 && reply.header == CLOCK_REPLY::DELAY_NEGATIVE) {
     return -2; // negative delay
   }
-  if (replylen != 5 || buffer[0] != static_cast<char>(CLOCK_REPLY::DELAY_OK)) {
+  if (replylen < 1 || reply.header != CLOCK_REPLY::DELAY_OK) {
     return -1;
   }
-  return utils::buffer_to_uint32(buffer + 1);
+  return reply.data;
 }

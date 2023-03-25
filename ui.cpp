@@ -158,13 +158,13 @@ void display_controller_task() {
     switch (message.header) {
       case display_msg_header::TIMER_CLOCK_MSG: { // time
         auto &time = message.data_as<timer_clock_t>();
-        auto str = sformat<50>(
+        auto str = pad<50>(sformat<50>(
           "Uptime: {}:{}:{}:{}",
           time.hours,
           time.minutes,
           time.seconds,
           time.hundred_ms
-        );
+        ), padding::left);
         takeover.enqueue(2, col_offset, str.data());
         ReplyValue(request_tid, reply);
         break;
@@ -384,10 +384,15 @@ void timer_task() {
   time.seconds = 0;
   time.hundred_ms = 0;
 
-  uint32_t current_time = Time(clock_server());
+  int current_time = Time(clock_server());
 
   while (1) {
-    current_time = DelayUntil(clock_server(), current_time + 10); // every 100ms
+    if (current_time < 1) {
+      // because DelayUntil() may fail if we miss a tick
+      current_time = Time(clock_server());
+    } else {
+      current_time = DelayUntil(clock_server(), current_time + 10); // every 100ms
+    }
     time.hundred_ms++;
     if (time.hundred_ms == 10) {
       time.seconds++;
