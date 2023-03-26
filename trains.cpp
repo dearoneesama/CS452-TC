@@ -69,7 +69,7 @@ void sensor_task() {
   auto clock_server = TaskFinder("clock_server");
   tid_t train_controller = MyParentTid();
 
-  auto send_sensor = [&track_task] (int tick, char module_char, int offset) {
+  auto send_sensor = [&track_task/*, &train_controller*/] (int tick, char module_char, int offset) {
     utils::enumed_class<tracks::track_msg_header, tracks::sensor_read> sensor_msg;
     sensor_msg.header = tracks::track_msg_header::SENSOR_READ;
     sensor_msg.data.sensor[0] = module_char;
@@ -82,6 +82,14 @@ void sensor_task() {
       sensor_msg.data.sensor.uninitialized_resize(3);
     }
     sensor_msg.data.tick = tick;
+    // stop distance experiment
+    /*if (sensor_msg.data.sensor == "E12") {
+      SendValue(train_controller, utils::enumed_class {
+        tc_msg_header::SPEED,
+        speed_cmd { 1, 0 }
+      }, null_reply);
+      ui::send_notice("automatically sent stop command");
+    }*/
     SendValue(track_task(), sensor_msg, null_reply);
   };
 
@@ -114,7 +122,7 @@ void sensor_task() {
       }
     }
 
-    Delay(clock_server(), 10); // 100ms
+    Delay(clock_server(), 6); // 60ms
   }
 }
 
