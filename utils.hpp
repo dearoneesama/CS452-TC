@@ -85,4 +85,22 @@ namespace troll {
 
   template<class InputIt, class Fn>
   it_transform(InputIt, InputIt, Fn) -> it_transform<InputIt, Fn>;
+
+  /**
+   * moving average of infinite count of values (for floating/fixed point types)
+   */
+  template<class T>
+  class pseudo_moving_average {
+  public:
+    constexpr void add(const T val) noexcept {
+      a_ += (val - a_) / ++n_;
+    }
+
+    constexpr T value() const noexcept {
+      return a_;
+    }
+  private:
+    T a_ {};
+    size_t n_ {};
+  };
 }  // namespace troll

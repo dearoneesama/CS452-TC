@@ -9,12 +9,12 @@ WARNINGS=-Wall -Wextra -Wpedantic -Wno-unused-const-variable
 CFLAGS_LIB:=-g -pipe -static -fno-builtin \
 	-fno-rtti -fno-exceptions -std=gnu++17 -I $(ETL_INCLUDE) -I $(FPM_INCLUDE) \
 	-Wno-return-type -I $(CATCH_DIR)
-CFLAGS:=$(CFLAGS_LIB) $(WARNINGS)
+CFLAGS:=$(CFLAGS_LIB) $(WARNINGS) -DIS_TRACK_A=1
 
-SOURCES := $(wildcard *.cpp)
+SOURCES := $(wildcard *.cpp) $(CATCH_DIR)/catch_amalgamated.cpp ../track_new.cpp ../track_graph.cpp ../track_consts.cpp ../format.cpp
 # Create .o and .d files for every .cpp
-OBJECTS := $(patsubst %, $(OUTPUT)/%, $(patsubst %.cpp, %.o, $(SOURCES)))
-DEPENDS := $(patsubst %, $(OUTPUT)/%, $(patsubst %.cpp, %.d, $(SOURCES)))
+OBJECTS := $(patsubst %, $(OUTPUT)/%, $(patsubst %.cpp, %.o, $(notdir $(SOURCES))))
+DEPENDS := $(patsubst %, $(OUTPUT)/%, $(patsubst %.cpp, %.d, $(notdir $(SOURCES))))
 
 all: $(OUTPUT) $(OUTPUT)/unittest.out
 
@@ -27,13 +27,13 @@ clean:
 $(OUTPUT)/catch_amalgamated.o: $(CATCH_DIR)/catch_amalgamated.cpp Makefile
 	$(CXX) $(CFLAGS_LIB) -MMD -MP -c $< -o $@
 
-$(OUTPUT)/format.o: ../format.cpp Makefile
-	$(CXX) $(CFLAGS_LIB) -MMD -MP -c $< -o $@
+$(OUTPUT)/%.o: ../%.cpp Makefile
+	$(CXX) $(CFLAGS) -MMD -MP -c $< -o $@
 
 $(OUTPUT)/%.o: %.cpp Makefile
 	$(CXX) $(CFLAGS) -MMD -MP -c $< -o $@
 
-$(OUTPUT)/unittest.out: $(OUTPUT)/catch_amalgamated.o $(OUTPUT)/format.o $(OBJECTS)
+$(OUTPUT)/unittest.out: $(OBJECTS)
 	$(CXX) $(CFLAGS) $^ -o $@
 
 run: $(OUTPUT) $(OUTPUT)/unittest.out

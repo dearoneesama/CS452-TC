@@ -1,5 +1,6 @@
 #pragma once
 
+#include <fpm/fixed.hpp>
 #include "kstddefs.hpp"
 #include "user_syscall_typed.hpp"
 #include "format.hpp"
@@ -39,7 +40,7 @@ using switch_read = tracks::switch_cmd;
 struct train_read {
   int num, cmd;
   tracks::position_t dest, pos;
-  int speed, delta_t, delta_d;
+  fpm::fixed_16_16 speed, delta_t, delta_d;
 };
 
 const char * const DISPLAY_CONTROLLER_NAME = "displayc";

@@ -6,6 +6,7 @@
 #include "trains.hpp"
 #include "format_scan.hpp"
 #include "rpi.hpp"
+#include "track_consts.hpp"
 
 namespace ui {
 
@@ -261,6 +262,7 @@ void command_controller_task() {
   auto train_controller = TaskFinder(trains::TRAIN_CONTROLLER_NAME);
   auto reverse_task = TaskFinder(trains::REVERSE_TASK_NAME);
   auto switch_task = TaskFinder(trains::SWITCH_TASK_NAME);
+  auto track_task = TaskFinder(tracks::TRACK_SERVER_TASK_NAME);
 
   utils::enumed_class<display_msg_header, char[64]> command_buffer;
   command_buffer.header = display_msg_header::USER_NOTICE;
@@ -282,6 +284,10 @@ void command_controller_task() {
   auto is_valid_solenoid_dir = [](int arg) {
     return arg == 'S' || arg == 'C';
   };
+  auto is_valid_node = [](const auto &s) {
+    auto &vn = tracks::valid_nodes();
+    return vn.find(s) != vn.end();
+  };
 
   utils::enumed_class<trains::tc_msg_header, trains::speed_cmd> speed_cmd_msg;
   speed_cmd_msg.header = trains::tc_msg_header::SPEED;
@@ -302,6 +308,7 @@ void command_controller_task() {
 
       int arg1 = 0, arg2 = 0;
       char char_arg = 0;
+      ::etl::string<4> str_arg;
       bool valid = false;
       /**
        * Formats:
@@ -309,6 +316,8 @@ void command_controller_task() {
        *   rv [1-80]
        *   sw [0-255] (S|C)
        *   st
+       *   init [1-80] str
+       *   q
        */
       if (troll::sscan(command_buffer.data, curr_size, "tr {} {}", arg1, arg2)) {
         if (is_valid_train(arg1) && is_valid_speed(arg2)) {
@@ -344,6 +353,15 @@ void command_controller_task() {
             valid = false;
             break;
           }
+        }
+      } else if (troll::sscan(command_buffer.data, curr_size, "init {} {}", arg1, str_arg)) {
+        if (is_valid_train(arg1) && is_valid_node(str_arg)) {
+          tracks::track_reply_msg reply {};
+          SendValue(track_task(), utils::enumed_class {
+            tracks::track_msg_header::TRAIN_POS_INIT,
+            tracks::train_pos_init_msg {arg1, str_arg},
+          }, reply);
+          valid = reply == tracks::track_reply_msg::OK;
         }
       } else if (curr_size == 1 && command_buffer.data[0] == 'q') {
         Terminate();
@@ -486,7 +504,7 @@ void initialize() {
 
   for (auto sw : tracks::valid_switches()) {
     switch_cmd_msg.data.switch_num = sw;
-    switch_cmd_msg.data.switch_dir = trains::switch_dir_t::C;
+    switch_cmd_msg.data.switch_dir = trains::switch_dir_t::S;
     replylen = SendValue(switch_task(), switch_cmd_msg.data, reply);
     if (replylen != 1 || reply != trains::tc_reply::OK) {
       send_notice("Could not send SWITCH command");

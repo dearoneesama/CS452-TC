@@ -1,28 +1,9 @@
 #pragma once
 
-#include <etl/array.h>
-#include "containers.hpp"
-#include "track_new.hpp"
+#include <etl/string.h>
 #include "trains.hpp"
 
 namespace tracks {
-  static constexpr size_t num_switches = 22;
-  static constexpr size_t num_trains = 6;
-
-  /**
-   * a static array of switch names.
-   */
-  etl::array<int, num_switches> const &valid_switches();
-
-  /**
-   * a static array of train numbers.
-   */
-  etl::array<int, num_trains> const &valid_trains();
-
-  /**
-   * a static adjacency list of track nodes.
-   */
-  troll::string_map<const track_node *, 4, TRACK_MAX> const &valid_nodes();
 
   void init_tasks();
 
@@ -36,6 +17,8 @@ namespace tracks {
     TRAIN_SPEED_CMD,
     SWITCH_CMD,
     SENSOR_READ,
+    TRAIN_PREDICT,
+    TRAIN_POS_INIT,
   };
 
   using speed_cmd = trains::speed_cmd;
@@ -50,5 +33,10 @@ namespace tracks {
   struct position_t {
     etl::string<4> name {};
     int offset {};
+  };
+
+  struct train_pos_init_msg {
+    int train;
+    etl::string<4> name;
   };
 }  // namespace tracks
