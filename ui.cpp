@@ -10,6 +10,35 @@
 
 namespace ui {
 
+ui_sender &out() {
+  static ui_sender sender;
+  return sender;
+}
+
+const char *manual[] = {
+  "Manual",
+  "tr <train_num> <speed_level>           Set train command",
+  "rv <train_num>                         Set train to opposite direction",
+  "sw <switch_num> S|C                    Set turnout direction",
+  "init <train_num> <node_name> <offset>  Set train position for tracking",
+  "goto <train_num> <node_name> <offset>  Make train go to a position",
+  "st                                     Stop all trains",
+  "q                                      Quit",
+  "",
+  "This program was compiled on " __DATE__ " " __TIME__ " for track "
+#if IS_TRACK_A
+  "A "
+#else
+  "B "
+#endif
+#if NO_CTS
+  "without "
+#else
+  "with "
+#endif
+  "CTS.",
+};
+
 void display_controller_task() {
   using namespace troll;
 
@@ -18,18 +47,18 @@ void display_controller_task() {
 
   tid_t request_tid;
 
-  // how many rows are reserved; 30th row (0-based) is the location for naive Putc
-  constexpr int user_rows = 44;
+  // how many rows are reserved; 59th row (0-based) is the location for naive Putc
+  constexpr int user_rows = 64;
   OutputControl<150, user_rows> takeover;
 
   // headline
   using title_style = static_ansi_style_options<
     ansi_font::bold | ansi_font::italic, ansi_color::red, ansi_color::yellow
   >;
-  auto title_str = sformat<50 + title_style::wrapper_str_size>(
+  auto title_str = sformat<78 + title_style::wrapper_str_size>(
     "{}{}{}",
     title_style::enabler_str(),
-    pad<50>("painful train program", padding::middle),
+    pad<78>("painful train program", padding::middle),
     title_style::disabler_str()
   );
   takeover.enqueue(0, 0, title_str.data());
@@ -133,17 +162,49 @@ void display_controller_task() {
     return it - valid_trains.begin();
   };
 
-  auto stringify_pos = [](tracks::position_t const &pos) {
-    return sformat<11>("{}+{}", pos.name.size() ? pos.name.data() : "?", pos.offset);
+  auto stringify_pos = [](tracks::position_t const &pos) -> ::etl::string<11> {
+    if (!pos.name.size()) {
+      return "?";
+    } else if (pos.offset == 0) {
+      return pos.name;
+    } else if (pos.offset < 0) {
+      return sformat<11>("{}{}", pos.name.data(), pos.offset);
+    } else {
+      return sformat<11>("{}+{}", pos.name.data(), pos.offset);
+    }
   };
 
-  // notice
-  takeover.enqueue(user_rows - 2, 0, "| ");
   // user's input
+  constexpr size_t user_input_row = 51;
+  using blink_style = static_ansi_style_options<ansi_font::blink>;
+  auto blinking_underscore = sformat<1 + blink_style::wrapper_str_size>(
+    "{}_{}", blink_style::enabler_str(), blink_style::disabler_str()
+  );
   size_t user_input_char_count = 0;
-  takeover.enqueue(user_rows - 1, 0, "> ");
+  takeover.enqueue(user_input_row, 0, "> ");
+  takeover.enqueue(user_input_row, 2, blinking_underscore.data());
 
-  utils::enumed_class<display_msg_header, char[128]> message;
+  // notices
+  constexpr size_t num_notices = 10;
+  ::etl::circular_buffer<::etl::string<256>, num_notices> notices;
+  for (size_t i = 0; i < num_notices; ++i) {
+    takeover.enqueue(user_input_row - 1 - i, 0, "| ");
+  }
+
+  // manual
+  constexpr size_t manual_row = 53;
+  using manual_style = static_ansi_style_options<ansi_font::dim>;
+  for (size_t i = 0; i < sizeof(manual) / sizeof(manual[0]); ++i) {
+    auto str = sformat<100 + manual_style::wrapper_str_size>(
+      "{}{}{}",
+      manual_style::enabler_str(),
+      manual[i],
+      manual_style::disabler_str()
+    );
+    takeover.enqueue(manual_row + i, col_offset, str.data());
+  }
+
+  utils::enumed_class<display_msg_header, char[256]> message;
   const char reply = 'o';
 
   while (1) {
@@ -194,14 +255,24 @@ void display_controller_task() {
         break;
       }
       case display_msg_header::SENSOR_MSG: { // sensors
-        sensor_reads.push(message.data_as<sensor_read>());
-        // redraw table
-        sensor_read_title_it.reset_src_iterator(sensor_reads.rbegin(), sensor_reads.rend());
-        sensor_read_tick_it.reset_src_iterator(sensor_reads.rbegin(), sensor_reads.rend());
-        sensor_tab.reset_src_iterator(sensor_read_title_it.begin(), sensor_read_title_it.end(), sensor_read_tick_it.begin());
-        row = sensor_table_row;
-        for (auto sv : sensor_tab) {
-          takeover.enqueue(row++, col_offset, sv.data());
+        auto &data = message.data_as<sensor_read>();
+        // do some special handling to avoid same sensor spamming screen
+        auto num_reports = sensor_reads.size();
+        auto &last = sensor_reads.back();
+        if (num_reports > 1 && last.sensor == data.sensor && sensor_reads[num_reports - 2].sensor == data.sensor) {
+          // last.tick = data.tick; not necessary
+          auto [row, col, patch] = sensor_tab.patch_str<1>(0, data.tick);
+          takeover.enqueue(row + sensor_table_row, col + col_offset, patch.data());
+        } else {
+          sensor_reads.push(data);
+          // redraw table
+          sensor_read_title_it.reset_src_iterator(sensor_reads.rbegin(), sensor_reads.rend());
+          sensor_read_tick_it.reset_src_iterator(sensor_reads.rbegin(), sensor_reads.rend());
+          sensor_tab.reset_src_iterator(sensor_read_title_it.begin(), sensor_read_title_it.end(), sensor_read_tick_it.begin());
+          row = sensor_table_row;
+          for (auto sv : sensor_tab) {
+            takeover.enqueue(row++, col_offset, sv.data());
+          }
         }
         ReplyValue(request_tid, reply);
         break;
@@ -226,27 +297,35 @@ void display_controller_task() {
         break;
       }
       case display_msg_header::USER_INPUT: { // user input
-        takeover.enqueue(user_rows - 1, 2 + user_input_char_count, message.data);
+        takeover.enqueue(user_input_row, 2 + user_input_char_count, message.data);
+        takeover.enqueue(user_input_row, 2 + user_input_char_count + 1, blinking_underscore.data());
         ++user_input_char_count;
         ReplyValue(request_tid, reply);
         break;
       }
       case display_msg_header::USER_BACKSPACE: { // user pressed backspace
         --user_input_char_count;
-        takeover.enqueue(user_rows - 1, 2 + user_input_char_count, " ");
+        takeover.enqueue(user_input_row, 2 + user_input_char_count, " ");
         ReplyValue(request_tid, reply);
         break;
       }
       case display_msg_header::USER_ENTER: { // user pressed enter
         user_input_char_count = 0;
-        takeover.enqueue(user_rows - 1, 2, nullptr);
+        takeover.enqueue(user_input_row, 2, nullptr);
+        takeover.enqueue(user_input_row, 2, blinking_underscore.data());
         ReplyValue(request_tid, reply);
         break;
       }
       case display_msg_header::USER_NOTICE: { // string
-        takeover.enqueue(user_rows - 2, 2, nullptr);
-        takeover.enqueue(user_rows - 2, 2, message.data);
         ReplyValue(request_tid, reply);
+        notices.push(message.data);
+        // redraw rows
+        row = user_input_row - 1;
+        auto rend = notices.rend();
+        for (auto nt = notices.rbegin(); nt != rend; ++nt, --row) {
+          takeover.enqueue(row, 2, nullptr);
+          takeover.enqueue(row, 2, nt->data());
+        }
         break;
       }
       default: {
@@ -258,7 +337,6 @@ void display_controller_task() {
 
 void command_controller_task() {
   auto gtkterm_rx = TaskFinder(gtkterm::GTK_RX_SERVER_NAME);
-  auto display_controller = TaskFinder(DISPLAY_CONTROLLER_NAME);
   auto train_controller = TaskFinder(trains::TRAIN_CONTROLLER_NAME);
   auto reverse_task = TaskFinder(trains::REVERSE_TASK_NAME);
   auto switch_task = TaskFinder(trains::SWITCH_TASK_NAME);
@@ -288,6 +366,9 @@ void command_controller_task() {
     auto &vn = tracks::valid_nodes();
     return vn.find(s) != vn.end();
   };
+  auto is_valid_offset = [](int arg) {
+    return arg >= 0;
+  };
 
   utils::enumed_class<trains::tc_msg_header, trains::speed_cmd> speed_cmd_msg;
   speed_cmd_msg.header = trains::tc_msg_header::SPEED;
@@ -302,23 +383,15 @@ void command_controller_task() {
   while (1) {
     char c = Getc(gtkterm_rx(), 0);
     if (c == '\r') {
-      SendValue(display_controller(), display_msg_header::USER_ENTER, null_reply);
+      out().send_value(display_msg_header::USER_ENTER);
       command_buffer.data[curr_size] = '\0';
-      SendValue(display_controller(), command_buffer, null_reply);
+      out().send_value(command_buffer);
 
       int arg1 = 0, arg2 = 0;
       char char_arg = 0;
       ::etl::string<4> str_arg;
       bool valid = false;
-      /**
-       * Formats:
-       *   tr [1-80] [0-14 or 16-30]
-       *   rv [1-80]
-       *   sw [0-255] (S|C)
-       *   st
-       *   init [1-80] str
-       *   q
-       */
+
       if (troll::sscan(command_buffer.data, curr_size, "tr {} {}", arg1, arg2)) {
         if (is_valid_train(arg1) && is_valid_speed(arg2)) {
           speed_cmd_msg.data.train = arg1;
@@ -354,12 +427,21 @@ void command_controller_task() {
             break;
           }
         }
-      } else if (troll::sscan(command_buffer.data, curr_size, "init {} {}", arg1, str_arg)) {
-        if (is_valid_train(arg1) && is_valid_node(str_arg)) {
+      } else if (troll::sscan(command_buffer.data, curr_size, "init {} {} {}", arg1, str_arg, arg2)) {
+        if (is_valid_train(arg1) && is_valid_node(str_arg) && is_valid_offset(arg2)) {
           tracks::track_reply_msg reply {};
           SendValue(track_task(), utils::enumed_class {
             tracks::track_msg_header::TRAIN_POS_INIT,
-            tracks::train_pos_init_msg {arg1, str_arg},
+            tracks::train_pos_init_msg {arg1, str_arg, arg2},
+          }, reply);
+          valid = reply == tracks::track_reply_msg::OK;
+        }
+      } else if (troll::sscan(command_buffer.data, curr_size, "goto {} {} {}", arg1, str_arg, arg2)) {
+        if (is_valid_train(arg1) && is_valid_node(str_arg) && is_valid_offset(arg2)) {
+          tracks::track_reply_msg reply {};
+          SendValue(track_task(), utils::enumed_class {
+            tracks::track_msg_header::TRAIN_POS_GOTO,
+            tracks::train_pos_goto_msg {arg1, str_arg, arg2},
           }, reply);
           valid = reply == tracks::track_reply_msg::OK;
         }
@@ -368,16 +450,13 @@ void command_controller_task() {
       }
 
       if (!valid) {
-        // append message to end of command buffer
-        const char invalid_msg[] = " is invalid!";
-        troll::snformat(command_buffer.data + curr_size, sizeof command_buffer.data - curr_size, invalid_msg);
-        SendValue(display_controller(), command_buffer, null_reply);
+        out().send_notice("Command was not delivered or it was not valid.");
       }
       curr_size = 0;
 
     } else if (c == 8 && curr_size >= 1) { // back space
       curr_size--;
-      SendValue(display_controller(), display_msg_header::USER_BACKSPACE, null_reply);
+      out().send_value(display_msg_header::USER_BACKSPACE);
 
     } else if (curr_size < 65) {
       command_buffer.data[curr_size++] = c;
@@ -385,13 +464,12 @@ void command_controller_task() {
         display_msg_header::USER_INPUT,
         {c, '\0'}
       };
-      SendValue(display_controller(), input_msg, null_reply);
+      out().send_value(input_msg);
     }
   }
 }
 
 void timer_task() {
-  auto display_controller = TaskFinder(DISPLAY_CONTROLLER_NAME);
   auto clock_server = TaskFinder("clock_server");
 
   utils::enumed_class<display_msg_header, timer_clock_t> message;
@@ -424,14 +502,12 @@ void timer_task() {
       time.hours++;
       time.minutes = 0;
     }
-    SendValue(display_controller(), message, null_reply);
+    out().send_value(message);
   }
 }
 
 // todo: move this somewhere else
 void idle_task() {
-  auto display_ctrl = TaskFinder(DISPLAY_CONTROLLER_NAME);
-
   time_percentage_t prev_percentages = {0, 0, 0};
   time_percentage_t curr_percentages = {0, 0, 0};
   time_distribution_t td = {0, 0, 0};
@@ -459,7 +535,7 @@ void idle_task() {
         percentages.kernel = curr_percentages.kernel;
         percentages.user = curr_percentages.user;
 
-        SendValue(display_ctrl(), message, null_reply);
+        out().send_value(message);
         prev_percentages = curr_percentages;
       }
     }
@@ -471,18 +547,18 @@ void initialize() {
   auto train_controller = TaskFinder(trains::TRAIN_CONTROLLER_NAME);
   auto switch_task = TaskFinder(trains::SWITCH_TASK_NAME);
 
-  send_notice("Initializing...");
+  out().send_notice("Initializing...");
 
   trains::tc_reply reply;
   int replylen = SendValue(train_controller(), trains::tc_msg_header::GO_CMD, reply);
   if (replylen != 1 || reply != trains::tc_reply::OK) {
-    send_notice("Could not send GO command\r\n");
+    out().send_notice("Could not send GO command\r\n");
     return;
   }
 
   replylen = SendValue(train_controller(), trains::tc_msg_header::SET_RESET_MODE, reply);
   if (replylen != 1 || reply != trains::tc_reply::OK) {
-    send_notice("Could not send RESET MODE command\r\n");
+    out().send_notice("Could not send RESET MODE command\r\n");
     return;
   }
 
@@ -494,7 +570,7 @@ void initialize() {
     speed_cmd_msg.data.train = train;
     SendValue(train_controller(), speed_cmd_msg, reply);
     if (replylen != 1 || reply != trains::tc_reply::OK) {
-      send_notice("Could not send SPEED command");
+      out().send_notice("Could not send SPEED command");
       return;
     }
   }
@@ -507,12 +583,12 @@ void initialize() {
     switch_cmd_msg.data.switch_dir = trains::switch_dir_t::S;
     replylen = SendValue(switch_task(), switch_cmd_msg.data, reply);
     if (replylen != 1 || reply != trains::tc_reply::OK) {
-      send_notice("Could not send SWITCH command");
+      out().send_notice("Could not send SWITCH command");
       return;
     }
   }
 
-  send_notice("Initialization complete");
+  out().send_notice("Initialization complete.");
 }
 
 void init_tasks() {

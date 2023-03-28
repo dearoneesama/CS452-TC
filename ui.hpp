@@ -47,13 +47,34 @@ const char * const DISPLAY_CONTROLLER_NAME = "displayc";
 
 void init_tasks();
 
-template <size_t N>
-inline void send_notice(char const (&msg)[N]) {
-  auto display_controller = TaskFinder(DISPLAY_CONTROLLER_NAME);
-  utils::enumed_class<display_msg_header, char[N]> message;
-  message.header = display_msg_header::USER_NOTICE;
-  troll::snformat(message.data, sizeof message.data, msg);
-  SendValue(display_controller(), message, null_reply);
-}
+struct ui_sender {
+  template<class T>
+  int send_value(T &&data, size_t len = sizeof(T)) {
+    return SendValue(display_controller(), std::forward<T>(data), len, null_reply);
+  }
+
+  template<size_t N>
+  int send_notice(etl::string<N> const &str) {
+    utils::enumed_class<display_msg_header, char[N]> message;
+    message.header = display_msg_header::USER_NOTICE;
+    auto len = troll::snformat(message.data, sizeof message.data, str.c_str());
+    return send_value(message, sizeof message.header + len + 1);
+  }
+
+  template<size_t N>
+  int send_notice(char const (&str)[N]) {
+    utils::enumed_class<display_msg_header, char[N]> message;
+    message.header = display_msg_header::USER_NOTICE;
+    auto len = troll::snformat(message.data, sizeof message.data, str);
+    return send_value(message, sizeof message.header + len + 1);
+  }
+
+  decltype(TaskFinder("")) display_controller { TaskFinder(DISPLAY_CONTROLLER_NAME) };
+};
+
+/**
+ * global helper structure for sending messages to the display controller task.
+ */
+ui_sender &out();
 
 }

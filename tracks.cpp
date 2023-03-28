@@ -71,15 +71,15 @@ namespace tracks {
       };
     }
 
-    static void send_train_ui_msg(const internal_train_state &train, tid_t display_controller) {
+    static void send_train_ui_msg(const internal_train_state &train) {
       utils::enumed_class msg {
         ui::display_msg_header::TRAIN_READ,
         make_train_ui_msg(train),
       };
-      SendValue(display_controller, msg, null_reply);
+      ui::out().send_value(msg);
     }
 
-    void handle_speed_cmd(speed_cmd &cmd, tid_t display_controller) {
+    void handle_speed_cmd(speed_cmd &cmd) {
       auto &train = trains.at(cmd.train);
 
       if (cmd.speed == train.cmd) {
@@ -105,23 +105,23 @@ namespace tracks {
       }
       train.cmd = cmd.speed;
       // package information and send to display controller
-      send_train_ui_msg(train, display_controller);
+      send_train_ui_msg(train);
     }
 
-    void handle_switch_cmd(switch_cmd &cmd, tid_t display_controller) {
+    void handle_switch_cmd(switch_cmd &cmd) {
       switches.at(cmd.switch_num) = cmd.switch_dir;
       // forward to display controller
       utils::enumed_class msg {
         ui::display_msg_header::SWITCHES,
         ui::switch_read { cmd.switch_num, cmd.switch_dir },
       };
-      SendValue(display_controller, msg, null_reply);
+      ui::out().send_value(msg);
     }
 
-    void handle_sensor_read(sensor_read &read, tid_t display_controller) {
+    void handle_sensor_read(sensor_read &read) {
       for (auto &pair : trains) {
         if (adjust_train_location_from_sensor(pair.second, read)) {
-          send_train_ui_msg(pair.second, display_controller);
+          send_train_ui_msg(pair.second);
         }
       }
       // forward to display controller
@@ -129,7 +129,7 @@ namespace tracks {
         ui::display_msg_header::SENSOR_MSG,
         ui::sensor_read { read.sensor, read.tick },
       };
-      SendValue(display_controller, msg, null_reply);
+      ui::out().send_value(msg);
     }
 
     bool adjust_train_location_from_sensor(internal_train_state &train, sensor_read &read) {
@@ -206,7 +206,7 @@ namespace tracks {
     /**
      * updates trains' locations and speeds based on estimations.
      */
-    void handle_train_predict(int current_tick, tid_t display_controller) {
+    void handle_train_predict(int current_tick) {
       for (auto &[num, train] : trains) {
         // short path
         if ((train.tick_snap.accel == fp{} && train.tick_snap.speed == fp{}) || !train.sensor_snap.pos.name.size()) {
@@ -242,18 +242,24 @@ namespace tracks {
         train.tick_snap.speed = new_v;
         train.tick_snap.tick = current_tick;
         train.sn_avg_speed.add(new_v);
-        send_train_ui_msg(train, display_controller);
+        send_train_ui_msg(train);
       }
     }
 
-    void handle_train_pos_init(const train_pos_init_msg &msg, tid_t display_controller) {
+    void handle_train_pos_init(const train_pos_init_msg &msg) {
       auto &train = trains.at(msg.train);
       auto old_cmd = train.cmd;
       train = {};
       train.num = msg.train;
       train.cmd = old_cmd;
       train.sensor_snap.pos.name = train.tick_snap.pos.name = msg.name;
-      send_train_ui_msg(train, display_controller);
+      train.tick_snap.pos.offset = msg.offset;
+      send_train_ui_msg(train);
+    }
+
+    void handle_train_pos_goto(const train_pos_goto_msg &msg) {
+      (void)msg;
+      ui::out().send_notice("noop, sorry.");
     }
 
     // information that is probably not good for credit if static
@@ -264,7 +270,6 @@ namespace tracks {
   void track_server() {
     track_state state;
     RegisterAs(TRACK_SERVER_TASK_NAME);
-    auto display_controller = TaskFinder(ui::DISPLAY_CONTROLLER_NAME);
     auto clock_server = TaskFinder("clock_server");
 
     utils::enumed_class<track_msg_header, char[128]> msg;
@@ -277,23 +282,27 @@ namespace tracks {
       switch (msg.header) {
       case track_msg_header::TRAIN_SPEED_CMD:
         ReplyValue(request_tid, null_reply);
-        state.handle_speed_cmd(msg.data_as<speed_cmd>(), display_controller());
+        state.handle_speed_cmd(msg.data_as<speed_cmd>());
         break;
       case track_msg_header::SWITCH_CMD:
         ReplyValue(request_tid, null_reply);
-        state.handle_switch_cmd(msg.data_as<switch_cmd>(), display_controller());
+        state.handle_switch_cmd(msg.data_as<switch_cmd>());
         break;
       case track_msg_header::SENSOR_READ:
         ReplyValue(request_tid, null_reply);
-        state.handle_sensor_read(msg.data_as<sensor_read>(), display_controller());
+        state.handle_sensor_read(msg.data_as<sensor_read>());
         break;
       case track_msg_header::TRAIN_PREDICT:
-        state.handle_train_predict(Time(clock_server()), display_controller());
+        state.handle_train_predict(Time(clock_server()));
         ReplyValue(request_tid, null_reply);
         break;
       case track_msg_header::TRAIN_POS_INIT:
         ReplyValue(request_tid, track_reply_msg::OK);
-        state.handle_train_pos_init(msg.data_as<train_pos_init_msg>(), display_controller());
+        state.handle_train_pos_init(msg.data_as<train_pos_init_msg>());
+        break;
+      case track_msg_header::TRAIN_POS_GOTO:
+        ReplyValue(request_tid, track_reply_msg::OK);
+        state.handle_train_pos_goto(msg.data_as<train_pos_goto_msg>());
         break;
       default:
         break;
@@ -305,7 +314,7 @@ namespace tracks {
     auto track_server = TaskFinder(TRACK_SERVER_TASK_NAME);
     auto clock_server = TaskFinder("clock_server");
     while (true) {
-      Delay(clock_server(), 7);  // update every 70ms
+      Delay(clock_server(), 15);  // update every 150ms
       SendValue(track_server(), track_msg_header::TRAIN_PREDICT, null_reply);
     }
   }

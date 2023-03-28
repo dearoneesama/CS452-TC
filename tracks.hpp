@@ -19,6 +19,7 @@ namespace tracks {
     SENSOR_READ,
     TRAIN_PREDICT,
     TRAIN_POS_INIT,
+    TRAIN_POS_GOTO,
   };
 
   using speed_cmd = trains::speed_cmd;
@@ -38,5 +39,8 @@ namespace tracks {
   struct train_pos_init_msg {
     int train;
     etl::string<4> name;
+    int offset;
   };
+
+  using train_pos_goto_msg = train_pos_init_msg;
 }  // namespace tracks

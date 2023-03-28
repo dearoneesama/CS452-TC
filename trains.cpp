@@ -26,7 +26,7 @@ void switch_task() {
     // if the switch was already at that position
     if (replylen == 1 && reply == tc_reply::SWITCH_UNCHANGED) {
     } else {
-      Delay(clock_server(), 30); // 300ms
+      DelayUntil(clock_server(), Time(clock_server()) + 30);  // 300ms
       SendValue(train_controller, tc_msg_header::SWITCH_CMD_PART_2, reply);
     }
   }
@@ -53,10 +53,10 @@ void reverse_task() {
     // need to think about what really happens if we send multiple reverse commands
     if (replylen == 1 && reply == tc_reply::TRAIN_ALREADY_REVERSING) {
     } else {
-      Delay(clock_server(), 300); // 3 seconds or 3000ms
+      DelayUntil(clock_server(), Time(clock_server()) + 300); // 3 seconds or 3000ms
       buffer.header = tc_msg_header::REVERSE_CMD_PART_2;
       SendValue(train_controller, buffer, null_reply);
-      Delay(clock_server(), 100);
+      DelayUntil(clock_server(), Time(clock_server()) + 100);
       buffer.header = tc_msg_header::REVERSE_CMD_PART_3;
       SendValue(train_controller, buffer, null_reply);
     }
@@ -153,9 +153,12 @@ void train_controller_task() {
     switch_directions[i] = switch_dir_t::NONE;
   }
 
-  auto send_train_speed = [&train_speeds, &merklin_tx, &track_task] (int train_num, int speed) {
+  auto send_train_speed = [&train_speeds, &merklin_tx, &track_task, &request_tid] (int train_num, int speed) {
     Putc(merklin_tx(), 1, (char)speed);
     Putc(merklin_tx(), 1, (char)train_num);
+
+    // track task may send cmds back to me so unblock it first
+    ReplyValue(request_tid, tc_reply::OK);
 
     utils::enumed_class track_msg {
       tracks::track_msg_header::TRAIN_SPEED_CMD,
@@ -175,7 +178,6 @@ void train_controller_task() {
 
         if (!is_train_reversing[train_num]) {
           send_train_speed(train_num, train_speeds[train_num] >= 16 ? 16 : 0);
-          ReplyValue(request_tid, tc_reply::OK);
           is_train_reversing[train_num] = true;
         } else {
           ReplyValue(request_tid, tc_reply::TRAIN_ALREADY_REVERSING);
@@ -185,10 +187,7 @@ void train_controller_task() {
       case tc_msg_header::REVERSE_CMD_PART_2: {
         auto &cmd = message.data_as<reverse_cmd>();
         int train_num = cmd.train;
-
         send_train_speed(train_num, 15);
-
-        ReplyValue(request_tid, tc_reply::OK);
         break;
       }
       case tc_msg_header::REVERSE_CMD_PART_3: {
@@ -197,7 +196,6 @@ void train_controller_task() {
 
         send_train_speed(train_num, train_speeds[train_num]);
         is_train_reversing[train_num] = false;
-        ReplyValue(request_tid, tc_reply::OK);
         break;
       }
       case tc_msg_header::SENSOR_CMD: {
@@ -238,9 +236,8 @@ void train_controller_task() {
         int train_num = cmd.train;
 
         if (!is_train_reversing[train_num]) {
-          send_train_speed(train_num, speed);
           train_speeds[train_num] = speed;
-          ReplyValue(request_tid, tc_reply::OK);
+          send_train_speed(train_num, speed);
         } else {
           ReplyValue(request_tid, tc_reply::TRAIN_ALREADY_REVERSING);
         }
