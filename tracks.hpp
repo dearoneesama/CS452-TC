@@ -32,13 +32,13 @@ namespace tracks {
   };
 
   struct position_t {
-    etl::string<4> name {};
+    etl::string<5> name {};
     int offset {};
   };
 
   struct train_pos_init_msg {
     int train;
-    etl::string<4> name;
+    etl::string<5> name;
     int offset;
   };
 

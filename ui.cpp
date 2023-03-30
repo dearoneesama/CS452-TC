@@ -378,7 +378,7 @@ void command_controller_task() {
 
       int arg1 = 0, arg2 = 0;
       char char_arg = 0;
-      ::etl::string<4> str_arg;
+      ::etl::string<5> str_arg;
       bool valid = false;
 
       if (troll::sscan(command_buffer.data, curr_size, "tr {} {}", arg1, arg2)) {
