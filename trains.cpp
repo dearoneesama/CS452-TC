@@ -6,28 +6,44 @@
 
 namespace trains {
 
+void switch_expire_timer() {
+  tid_t switch_task = MyParentTid();
+  auto clock_server = TaskFinder("clock_server");
+  while (true) {
+    SendValue(switch_task, switch_cmd {}/*dummy*/, null_reply);
+    DelayUntil(clock_server(), Time(clock_server()) + 30);  // 300ms
+  }
+}
+
 void switch_task() {
   RegisterAs(SWITCH_TASK_NAME);
-  auto clock_server = TaskFinder("clock_server");
   tid_t train_controller = MyParentTid();
+  tid_t expire_timer = Create(priority_t::PRIORITY_L2, switch_expire_timer);
 
   tid_t request_tid;
   utils::enumed_class<tc_msg_header, switch_cmd> buffer;
   buffer.header = tc_msg_header::SWITCH_CMD_PART_1;
+  int turn_off_counts = 0;
 
   while (1) {
-    int request = ReceiveValue(request_tid, buffer.data);
-    if (request <= 0) continue;
-    ReplyValue(request_tid, tc_reply::OK);
-
-    tc_reply reply;
-    int replylen = SendValue(train_controller, buffer, reply);
-
-    // if the switch was already at that position
-    if (replylen == 1 && reply == tc_reply::SWITCH_UNCHANGED) {
+    if (ReceiveValue(request_tid, buffer.data) <= 0) {
+      continue;
+    }
+    if (request_tid == expire_timer) {
+      if (turn_off_counts && turn_off_counts - 1 == 0) {
+        --turn_off_counts;
+        SendValue(train_controller, tc_msg_header::SWITCH_CMD_PART_2, null_reply);
+      } else if (turn_off_counts) {
+        ReplyValue(request_tid, tc_reply::OK);
+      }
     } else {
-      DelayUntil(clock_server(), Time(clock_server()) + 30);  // 300ms
-      SendValue(train_controller, tc_msg_header::SWITCH_CMD_PART_2, reply);
+      tc_reply reply;
+      int replylen = SendValue(train_controller, buffer, reply);
+      ReplyValue(request_tid, tc_reply::OK);
+      if (replylen == 1 && reply == tc_reply::OK) {
+        ++turn_off_counts;
+        ReplyValue(expire_timer, tc_reply::OK);
+      }
     }
   }
 }
@@ -215,13 +231,13 @@ void train_controller_task() {
           Putc(merklin_tx(), 1, (char)(cmd.switch_dir));
           Putc(merklin_tx(), 1, (char)(cmd.switch_num));
           switch_directions[cmd.switch_num] = cmd.switch_dir;
+          ReplyValue(request_tid, tc_reply::OK);
           //
           SendValue(track_task(), utils::enumed_class {
             tracks::track_msg_header::SWITCH_CMD,
             tracks::switch_cmd { cmd.switch_num, cmd.switch_dir },
           }, null_reply);
 
-          ReplyValue(request_tid, tc_reply::OK);
         }
         break;
       }
