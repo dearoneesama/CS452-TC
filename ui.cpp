@@ -26,7 +26,7 @@ const char *manual[] = {
   "q                                      Quit",
   "",
   "This program was compiled on " __DATE__ " " __TIME__ " for track "
-#if IS_TRACK_A
+#if IS_TRACK_A == 1
   "A "
 #else
   "B "
@@ -162,18 +162,6 @@ void display_controller_task() {
     return it - valid_trains.begin();
   };
 
-  auto stringify_pos = [](tracks::position_t const &pos) -> ::etl::string<11> {
-    if (!pos.name.size()) {
-      return "?";
-    } else if (pos.offset == 0) {
-      return pos.name;
-    } else if (pos.offset < 0) {
-      return sformat<11>("{}{}", pos.name.data(), pos.offset);
-    } else {
-      return sformat<11>("{}+{}", pos.name.data(), pos.offset);
-    }
-  };
-
   // user's input
   constexpr size_t user_input_row = 51;
   using blink_style = static_ansi_style_options<ansi_font::blink>;
@@ -305,7 +293,8 @@ void display_controller_task() {
       }
       case display_msg_header::USER_BACKSPACE: { // user pressed backspace
         --user_input_char_count;
-        takeover.enqueue(user_input_row, 2 + user_input_char_count, " ");
+        takeover.enqueue(user_input_row, 2 + user_input_char_count, "  ");
+        takeover.enqueue(user_input_row, 2 + user_input_char_count, blinking_underscore.data());
         ReplyValue(request_tid, reply);
         break;
       }

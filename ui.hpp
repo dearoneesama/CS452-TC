@@ -43,6 +43,19 @@ struct train_read {
   fpm::fixed_16_16 speed, delta_t, delta_d;
 };
 
+template<class T>
+etl::string<11> stringify_pos(T const &pos) {
+  if (!pos.name.size()) {
+    return "?";
+  } else if (pos.offset == 0) {
+    return pos.name;
+  } else if (pos.offset < 0) {
+    return troll::sformat<11>("{}{}", pos.name.data(), pos.offset);
+  } else {
+    return troll::sformat<11>("{}+{}", pos.name.data(), pos.offset);
+  }
+}
+
 const char * const DISPLAY_CONTROLLER_NAME = "displayc";
 
 void init_tasks();
