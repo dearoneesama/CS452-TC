@@ -7,6 +7,11 @@
 namespace tracks {
 
   /**
+   * how many ticks to wait before assuming a train has left a sensor.
+   */
+  static constexpr auto train_sensor_expire_timeout = 50;
+
+  /**
    * information about a train.
    * 
    * units for distances are mm.
@@ -44,6 +49,8 @@ namespace tracks {
 
     // train is approaching source sensor instead of leaving?
     bool approaching_sensor {};
+    // train is on the sensor thus spamming lots of sensor reads?
+    bool sitting_on_sensor {};
   };
 
   /**
@@ -53,6 +60,7 @@ namespace tracks {
     track_state() {
       for (auto i : valid_trains()) {
         trains[i].num = {i};
+        last_train_sensor_updates[i] = 0;
       }
       for (auto i : valid_switches()) {
         switches[i] = switch_dir_t::NONE;
@@ -79,30 +87,40 @@ namespace tracks {
       ui::out().send_value(msg);
     }
 
-    void handle_speed_cmd(speed_cmd &cmd) {
+    void handle_speed_cmd(int current_tick, speed_cmd &cmd) {
       auto &train = trains.at(cmd.train);
+      train.sn_accelerated = true;
 
       if (cmd.speed == train.cmd) {
         return;
       }
+      handle_train_predict(train, current_tick);
 
-      train.sn_accelerated = true;
       if (cmd.speed == 15) {
         train.lo_to_hi = false;
-        train.approaching_sensor = !train.approaching_sensor;
+        if (train.sitting_on_sensor) {
+          // sensor won't send a feedback for the reverse direction because it is pressed
+          // so need to set the state here
+          train.sensor_snap.pos.name = train.tick_snap.pos.name
+            = valid_nodes().at(train.sensor_snap.pos.name)->reverse->name;
+          train.sensor_snap.pos.offset = 0;
+          train.tick_snap.pos.offset = -train.tick_snap.pos.offset;
+        } else {
+          train.approaching_sensor = !train.approaching_sensor;
+        }
       } else if (train.cmd == 15) {
         train.lo_to_hi = true;
       } else {
         auto new_speed = train_speed(train.num, cmd.speed, train.cmd);
-        auto old_speed = train.sensor_snap.speed;
+        auto old_speed = train.tick_snap.speed;
         train.lo_to_hi = new_speed >= old_speed;
+        if (train.lo_to_hi) {
+          train.tick_snap.accel = train_acceleration(cmd.train, cmd.speed, train.cmd);
+        } else {
+          train.tick_snap.accel = -train_acceleration(cmd.train, cmd.speed, train.cmd);
+        }
       }
 
-      if (train.lo_to_hi) {
-        train.tick_snap.accel = train_acceleration(cmd.train, cmd.speed, train.cmd);
-      } else {
-        train.tick_snap.accel = -train_acceleration(cmd.train, cmd.speed, train.cmd);
-      }
       train.cmd = cmd.speed;
       // package information and send to display controller
       send_train_ui_msg(train);
@@ -119,9 +137,9 @@ namespace tracks {
     }
 
     void handle_sensor_read(sensor_read &read) {
-      for (auto &pair : trains) {
-        if (adjust_train_location_from_sensor(pair.second, read)) {
-          send_train_ui_msg(pair.second);
+      for (auto *train_ptr : initialized_trains) {
+        if (adjust_train_location_from_sensor(*train_ptr, read)) {
+          send_train_ui_msg(*train_ptr);
         }
       }
       // forward to display controller
@@ -133,10 +151,10 @@ namespace tracks {
     }
 
     bool adjust_train_location_from_sensor(internal_train_state &train, sensor_read &read) {
-      // assume every train must have a preset location
-      if (!train.sensor_snap.pos.name.size()) {
-        return false;
-      }
+      bool train_was_on_sensor = train.sitting_on_sensor;
+      train.sitting_on_sensor = true;
+      last_train_sensor_updates[train.num] = read.tick;
+
       auto *train_node = valid_nodes().at(train.sensor_snap.pos.name);
       auto *sensor_node = valid_nodes().at(read.sensor);
 
@@ -149,7 +167,7 @@ namespace tracks {
         train.sensor_snap.tick = read.tick;
         train.tick_snap = train.sensor_snap;
         // reset some states
-        train.sn_accelerated = false;
+        train.sn_accelerated = train.tick_snap.accel != fp{};
         train.approaching_sensor = false;
         train.sn_avg_speed = {};
       };
@@ -157,7 +175,7 @@ namespace tracks {
       // doing this to ensure: if train is stopped at sensor, then when it restarts, it will
       // have correct time tick. but if train is just passing by the sensor very slowly, just
       // ignore it.
-      if (train.sensor_snap.pos.name == read.sensor) {
+      if (train_node == sensor_node) {
         if (train.sensor_snap.accel == fp{} && train.tick_snap.speed == fp{}) {
           // train is stopped at sensor
           train.sensor_snap.tick = train.tick_snap.tick = read.tick;
@@ -169,6 +187,11 @@ namespace tracks {
 
       // handle a special case first: train leaves sensor, then reverses and so it comes back!
       if (train_node->reverse == sensor_node) {
+        // or it just reverses on the sensor, in which case sensor will be opposite.
+        if (train_was_on_sensor) {
+          train.sensor_snap.tick = train.tick_snap.tick = read.tick;
+          return true;
+        }
         reset_snaps();
         // dd and dt are not reportable in this case
         train.sn_delta_d = train.sn_delta_t = fp{999999} / 100;
@@ -186,63 +209,80 @@ namespace tracks {
       // need to report dt and dd
       auto expected_d = fp(std::get<1>(*train_next));
       auto actual_d = fp(train.tick_snap.pos.offset);
-      auto actual_t = fp(train.tick_snap.tick - train.sensor_snap.tick) / 100;
-      auto expected_t = expected_d / train.sn_avg_speed.value();
       train.sn_delta_d = actual_d - expected_d;
-      train.sn_delta_t = actual_t - expected_t;
 
-      // make correction to train's speed, if there is no acceleration occurring
-      if (!train.sn_accelerated && train.cmd) {
-        const auto alpha = fp{0.3};
-        auto &standard_v = train.lo_to_hi ? train_speed(train.num, train.cmd, 0) : train_speed(train.num, train.cmd, 14);
-        auto new_v = alpha * train.tick_snap.speed + (fp{1} - alpha) * actual_d / actual_t;
-        train.tick_snap.speed = standard_v = new_v;
+      if (train.sn_avg_speed.value() != fp{}) {
+        auto actual_t = fp(train.tick_snap.tick - train.sensor_snap.tick) / 100;
+        auto expected_t = expected_d / train.sn_avg_speed.value();
+        train.sn_delta_t = actual_t - expected_t;
+
+        // make correction to train's speed, if there is no acceleration occurring
+        if (!train.sn_accelerated && actual_t != fp{}) {
+          const auto alpha = fp{0.7};
+          auto &standard_v = train.lo_to_hi ? train_speed(train.num, train.cmd, 0) : train_speed(train.num, train.cmd, 14);
+          auto new_v = alpha * train.tick_snap.speed + (fp{1} - alpha) * expected_d / actual_t;
+          train.tick_snap.speed = standard_v = new_v;
+        }
       }
 
       reset_snaps();
       return true;
     }
 
+    void handle_train_predict(internal_train_state &train, int current_tick) {
+      train.sitting_on_sensor = (current_tick - last_train_sensor_updates.at(train.num)) < train_sensor_expire_timeout;
+      // short path
+      if ((train.tick_snap.accel == fp{} && train.tick_snap.speed == fp{})) {
+        train.tick_snap.tick = current_tick;
+        train.sn_avg_speed.add({});
+        return;
+      }
+      auto dt = fp(current_tick - train.tick_snap.tick) / 100;
+      auto new_v = train.tick_snap.speed + train.tick_snap.accel * dt;
+
+      // clamp speed to max values if acceleration is complete
+      auto clamped = false;
+      int ddist;
+      if (train.tick_snap.accel != fp{}) {
+        if (train.lo_to_hi) {
+          auto target_v = train_speed(train.num, train.cmd, 0);
+          if (new_v >= target_v) {
+            new_v = target_v;
+            clamped = true;
+          }
+        } else {
+          auto target_v = train_speed(train.num, train.cmd, 14);
+          if (new_v <= target_v) {
+            new_v = target_v;
+            clamped = true;
+          }
+        }
+        // sloppy estimation: vf^2 - vi^0 = 2ad because our t is small
+        ddist = int{(new_v * new_v - train.tick_snap.speed * train.tick_snap.speed) / (2 * train.tick_snap.accel)};
+        // auto ddist = static_cast<int>(train.tick_snap.speed * dt + train.tick_snap.accel * dt * dt / 2);
+      } else {
+        ddist = int{new_v * dt};
+      }
+      if (train.approaching_sensor) {
+        train.tick_snap.pos.offset -= ddist;
+      } else {
+        train.tick_snap.pos.offset += ddist;
+      }
+      if (clamped) {
+        train.tick_snap.accel = {};
+      }
+      train.tick_snap.speed = new_v;
+      train.tick_snap.tick = current_tick;
+      train.sn_avg_speed.add(new_v);
+      send_train_ui_msg(train);
+    }
+
     /**
      * updates trains' locations and speeds based on estimations.
      */
     void handle_train_predict(int current_tick) {
-      for (auto &[num, train] : trains) {
-        // short path
-        if ((train.tick_snap.accel == fp{} && train.tick_snap.speed == fp{}) || !train.sensor_snap.pos.name.size()) {
-          train.sn_avg_speed.add({});
-          continue;
-        }
-        auto dt = fp(current_tick - train.tick_snap.tick) / 100;
-        auto new_v = train.tick_snap.speed + train.tick_snap.accel * dt;
-
-        // clamp speed to max values if acceleration is complete
-        if (train.tick_snap.accel != fp{}) {
-          if (train.lo_to_hi) {
-            auto target_v = train_speed(train.num, train.cmd, 0);
-            if (new_v >= target_v) {
-              new_v = target_v;
-              train.tick_snap.accel = {};
-            }
-          } else {
-            auto target_v = train_speed(train.num, train.cmd, 14);
-            if (new_v <= target_v) {
-              new_v = target_v;
-              train.tick_snap.accel = {};
-            }
-          }
-        }
-        // sloppy estimation: s = v0t + 1/2at^2 because our t is small
-        auto ddist = static_cast<int>(train.tick_snap.speed * dt + train.tick_snap.accel * dt * dt / 2);
-        if (train.approaching_sensor) {
-          train.tick_snap.pos.offset -= ddist;
-        } else {
-          train.tick_snap.pos.offset += ddist;
-        }
-        train.tick_snap.speed = new_v;
-        train.tick_snap.tick = current_tick;
-        train.sn_avg_speed.add(new_v);
-        send_train_ui_msg(train);
+      for (auto *train_ptr : initialized_trains) {
+        handle_train_predict(*train_ptr, current_tick);
       }
     }
 
@@ -254,17 +294,40 @@ namespace tracks {
       train.cmd = old_cmd;
       train.sensor_snap.pos.name = train.tick_snap.pos.name = msg.name;
       train.tick_snap.pos.offset = msg.offset;
+      if (std::find(initialized_trains.begin(), initialized_trains.end(), &train) == initialized_trains.end()) {
+        initialized_trains.push_back(&train);
+      }
       send_train_ui_msg(train);
     }
 
     void handle_train_pos_goto(const train_pos_goto_msg &msg) {
-      (void)msg;
+      auto &train = trains.at(msg.train);
+      if (std::find(initialized_trains.begin(), initialized_trains.end(), &train) == initialized_trains.end()) {
+        ui::out().send_notice("Train is not initialized.");
+        return;
+      }
+
       ui::out().send_notice("noop, sorry.");
     }
 
     // information that is probably not good for credit if static
+
+    /**
+     * all possible train structures indexed by its num.
+     */
     etl::unordered_map<int, internal_train_state, num_trains> trains {};
-    etl::unordered_map<int, switch_dir_t, num_switches> switches {};
+    /**
+     * all train numbers whose trains have been initialized.
+     */
+    etl::vector<internal_train_state *, num_trains> initialized_trains {};
+    /**
+     * timestamps when train activates sensor.
+     */
+    etl::unordered_map<int, int, num_trains> last_train_sensor_updates {};
+    /**
+     * switch statuses.
+     */
+    switch_status_t switches {};
   };
 
   void track_server() {
@@ -282,7 +345,7 @@ namespace tracks {
       switch (msg.header) {
       case track_msg_header::TRAIN_SPEED_CMD:
         ReplyValue(request_tid, null_reply);
-        state.handle_speed_cmd(msg.data_as<speed_cmd>());
+        state.handle_speed_cmd(Time(clock_server()), msg.data_as<speed_cmd>());
         break;
       case track_msg_header::SWITCH_CMD:
         ReplyValue(request_tid, null_reply);
