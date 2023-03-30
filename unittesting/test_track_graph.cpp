@@ -20,3 +20,106 @@ TEST_CASE("next_sensor usage", "[next_sensor]") {
     REQUIRE(std::get<0>(result.value()) == C16);
   }
 }
+
+TEST_CASE("find_path usage", "find_path") {
+  auto const *E11 = tracks::valid_nodes().at("E11"),
+             *E10 = tracks::valid_nodes().at("E10"),
+             *E12 = tracks::valid_nodes().at("E12"),
+             *E13 = tracks::valid_nodes().at("E13"),
+             *D5 = tracks::valid_nodes().at("D5"),
+             *D6 = tracks::valid_nodes().at("D6"),
+             *D10 = tracks::valid_nodes().at("D10"),
+             *D11 = tracks::valid_nodes().at("D11"),
+             *D12 = tracks::valid_nodes().at("D12"),
+             *BR7 = tracks::valid_nodes().at("BR7"),
+             *BR8 = tracks::valid_nodes().at("BR8"),
+             *BR9 = tracks::valid_nodes().at("BR9"),
+             *MR8 = tracks::valid_nodes().at("MR8"),
+             *MR9 = tracks::valid_nodes().at("MR9");
+
+  SECTION("same sensor only calc offsets") {
+    auto result = tracks::find_path(E12, E12, 106, 200, {});
+    REQUIRE(result->size() == 1);
+    auto &seg1_vec = std::get<0>(result->at(0));
+    auto seg1_dist = std::get<1>(result->at(0));
+    REQUIRE(seg1_vec.size() == 1);
+    REQUIRE(seg1_vec[0] == E12);
+    REQUIRE(seg1_dist == 94);
+    auto seg1_str = tracks::stringify_node_path_segment<50>(result->at(0));
+    REQUIRE(seg1_str == "(E12;94)");
+    REQUIRE(seg1_str.size() == 8);
+  }
+
+  SECTION("opposite sensor do nothing but reverse") {
+    auto result = tracks::find_path(E11, E12, 0, 0, {});
+    REQUIRE(result->size() == 2);
+    auto &seg1_vec = std::get<0>(result->at(0));
+    REQUIRE(seg1_vec.size() == 1);
+    REQUIRE(seg1_vec[0] == E11);
+    auto &seg2_vec = std::get<0>(result->at(1));
+    REQUIRE(seg2_vec.size() == 1);
+    REQUIRE(seg2_vec[0] == E12);
+  }
+
+  SECTION("E12->D11 section straight") {
+    auto result = tracks::find_path(E12, D11, 0, 16, {});
+    REQUIRE(result->size() == 1);
+    auto &seg1_vec = std::get<0>(result->at(0));
+    auto seg1_dist = std::get<1>(result->at(0));
+    REQUIRE(seg1_vec.size() == 3);
+    REQUIRE(seg1_vec[0] == E12);
+    REQUIRE(seg1_vec[1] == BR7);
+    REQUIRE(seg1_vec[2] == D11);
+    REQUIRE(seg1_dist == 50 + 231 + 16);
+    auto seg1_str = tracks::stringify_node_path_segment<50>(result->at(0));
+    REQUIRE(seg1_str == "(E12,BR7,D11;297)");
+    REQUIRE(seg1_str.size() == 17);
+  }
+
+  SECTION("E12->D11->D12 reverse at destination") {
+    auto result = tracks::find_path(E12, D12, 0, 0, {});
+    REQUIRE(result->size() == 2);
+    auto &seg1_vec = std::get<0>(result->at(0));
+    auto seg1_dist = std::get<1>(result->at(0));
+    REQUIRE(seg1_vec.size() == 3);
+    REQUIRE(seg1_vec[0] == E12);
+    REQUIRE(seg1_vec[1] == BR7);
+    REQUIRE(seg1_vec[2] == D11);
+    REQUIRE(seg1_dist == 50 + 231);
+    auto &seg2_vec = std::get<0>(result->at(1));
+    auto seg2_dist = std::get<1>(result->at(1));
+    REQUIRE(seg2_vec.size() == 1);
+    REQUIRE(seg2_vec[0] == D12);
+    REQUIRE(seg2_dist == 0);
+  }
+
+  SECTION("E12->E13 reverse at beginning, then in middle") {
+    auto result = tracks::find_path(E12, E13, 0, 0, {});
+    REQUIRE(result->size() == 3);
+    auto &seg1_vec = std::get<0>(result->at(0));
+    auto seg1_dist = std::get<1>(result->at(0));
+    REQUIRE(seg1_vec.size() == 1);
+    REQUIRE(seg1_vec[0] == E12);
+    REQUIRE(seg1_dist == 0);
+
+    auto &seg2_vec = std::get<0>(result->at(1));
+    auto seg2_dist = std::get<1>(result->at(1));
+    REQUIRE(seg2_vec.size() == 5);
+    REQUIRE(seg2_vec[0] == E11);
+    REQUIRE(seg2_vec[1] == D10);
+    REQUIRE(seg2_vec[2] == MR8);
+    REQUIRE(seg2_vec[3] == BR9);
+    REQUIRE(seg2_vec[4] == D5);
+    REQUIRE(seg2_dist == 1079);
+
+    auto &seg3_vec = std::get<0>(result->at(2));
+    auto seg3_dist = std::get<1>(result->at(2));
+    REQUIRE(seg3_vec.size() == 5);
+    REQUIRE(seg3_vec[0] == D6);
+    REQUIRE(seg3_vec[1] == MR9);
+    REQUIRE(seg3_vec[2] == BR8);
+    REQUIRE(seg3_vec[3] == E10);
+    REQUIRE(seg3_vec[4] == E13);
+    REQUIRE(seg3_dist == 1009);
+  }
+}
