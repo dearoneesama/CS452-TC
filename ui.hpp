@@ -1,8 +1,8 @@
 #pragma once
 
 #include <fpm/fixed.hpp>
-#include "kstddefs.hpp"
-#include "user_syscall_typed.hpp"
+#include "kern/kstddefs.hpp"
+#include "kern/user_syscall_typed.hpp"
 #include "format.hpp"
 #include "utils.hpp"
 #include "tracks.hpp"

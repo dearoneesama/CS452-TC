@@ -1,6 +1,6 @@
 #include "trains.hpp"
-#include "merklin.hpp"
-#include "user_syscall_typed.hpp"
+#include "kern/merklin.hpp"
+#include "kern/user_syscall_typed.hpp"
 #include "ui.hpp"
 #include "utils.hpp"
 

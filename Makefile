@@ -50,10 +50,10 @@ CFLAGS:= $(OPTLVL) -pipe -static $(WARNINGS) -ffreestanding -nostartfiles \
 LDFLAGS:=-Wl,-nmagic -Wl,-Tlinker.ld
 
 # Source files and include dirs
-SOURCES := $(wildcard *.cpp) $(wildcard *.S)
+SOURCES := $(wildcard *.cpp) $(wildcard kern/*.cpp) $(wildcard kern/*.S)
 # Create .o and .d files for every .cpp and .S (hand-written assembly) file
-OBJECTS := $(patsubst %, $(OUTPUT)/%, $(patsubst %.cpp, %.o, $(patsubst %.S, %.o, $(SOURCES))))
-DEPENDS := $(patsubst %, $(OUTPUT)/%, $(patsubst %.cpp, %.d, $(patsubst %.S, %.d, $(SOURCES))))
+OBJECTS := $(patsubst %, $(OUTPUT)/%, $(patsubst %.cpp, %.o, $(patsubst %.S, %.o, $(notdir $(SOURCES)))))
+DEPENDS := $(patsubst %, $(OUTPUT)/%, $(patsubst %.cpp, %.d, $(patsubst %.S, %.d, $(notdir $(SOURCES)))))
 
 # The first rule is the default, ie. "make", "make all" and "make kernel8.img" mean the same
 all: $(OUTPUT) $(OUTPUT)/kernel8.img
@@ -74,7 +74,10 @@ $(OUTPUT)/kernel8.elf: $(OBJECTS) linker.ld
 $(OUTPUT)/%.o: %.cpp Makefile doit.sh
 	$(CXX) $(CFLAGS) -MMD -MP -c $< -o $@
 
-$(OUTPUT)/%.o: %.S Makefile doit.sh
+$(OUTPUT)/%.o: kern/%.cpp Makefile doit.sh
+	$(CXX) $(CFLAGS) -MMD -MP -c $< -o $@
+
+$(OUTPUT)/%.o: kern/%.S Makefile doit.sh
 	$(CXX) $(CFLAGS) -MMD -MP -c $< -o $@
 
 -include $(DEPENDS)

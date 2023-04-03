@@ -1,11 +1,11 @@
 #include <etl/circular_buffer.h>
 #include <etl/fixed_iterator.h>
 #include "ui.hpp"
-#include "gtkterm.hpp"
-#include "kstddefs.hpp"
+#include "kern/gtkterm.hpp"
+#include "kern/kstddefs.hpp"
 #include "trains.hpp"
 #include "format_scan.hpp"
-#include "rpi.hpp"
+#include "kern/rpi.hpp"
 #include "track_consts.hpp"
 
 namespace ui {

@@ -2,7 +2,7 @@
 
 #include <stddef.h>
 #include <stdint.h>
-#include "format.hpp"
+#include "../format.hpp"
 
 void init_gpio();
 void init_spi(uint32_t channel);

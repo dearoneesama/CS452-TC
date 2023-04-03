@@ -1,11 +1,11 @@
-#include "kernel.hpp"
-#include "rpi.hpp"
-#include "tasking.hpp"
+#include "kern/kernel.hpp"
+#include "kern/rpi.hpp"
+#include "kern/tasking.hpp"
 #include "user.hpp"
-#include "timer.hpp"
+#include "kern/timer.hpp"
+#include "kern/irq.include"
+#include "kern/gpio.hpp"
 #include "format.hpp"
-#include "irq.include"
-#include "gpio.hpp"
 
 void initialize() {
   // run static/global constructors manually

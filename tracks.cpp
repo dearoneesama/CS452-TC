@@ -1,5 +1,5 @@
 #include "tracks.hpp"
-#include "user_syscall_typed.hpp"
+#include "kern/user_syscall_typed.hpp"
 #include "ui.hpp"
 #include "track_consts.hpp"
 #include "track_graph.hpp"

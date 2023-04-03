@@ -1,7 +1,7 @@
 /* THIS FILE IS GENERATED CODE -- DO NOT EDIT */
 
 #include "track_new.hpp"
-#include "rpi.hpp"
+#include "kern/rpi.hpp"
 
 namespace {
 void init_index(track_node *track) {
