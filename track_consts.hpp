@@ -7,7 +7,7 @@
 #include "track_new.hpp"
 
 namespace tracks {
-  using fp = fpm::fixed_16_16;
+  using fp = fpm::fixed_24_8;
 
   static constexpr size_t num_switches = 22;
   static constexpr size_t num_trains = 6;
@@ -43,4 +43,21 @@ namespace tracks {
    * RESULT is absolute value of acceleration.
    */
   fp &train_acceleration(int train, int target_speed_level, int old_speed_level);
+
+  /**
+   * acceleration distance: the distance a train needs to travel to reach constant
+   * speed from 0 given speed level.
+   * 
+   * braking distance: the distance a train needs to travel to stop from constant
+   * speed level.
+   */
+  std::tuple<int, int> accel_deaccel_distance(int train, int steady_speed_level);
+
+  /**
+   * find a suitable speed level such that train can accelerate and brake, while the total
+   * distance for them is less than or equal to `distance`.
+   * 
+   * this speed is normalized to 1-14.
+   */
+  int find_max_speed_level_for_dist(int train, int distance);
 }

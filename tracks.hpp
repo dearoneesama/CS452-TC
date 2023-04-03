@@ -2,6 +2,7 @@
 
 #include <etl/string.h>
 #include "trains.hpp"
+#include "utils.hpp"
 
 namespace tracks {
 
@@ -19,7 +20,11 @@ namespace tracks {
     SENSOR_READ,
     TRAIN_PREDICT,
     TRAIN_POS_INIT,
+    TRAIN_POS_DEINIT,
     TRAIN_POS_GOTO,
+    TRAINS_STOP,
+    TO_TC_COURIER,
+    TO_SWITCH_COURIER,
   };
 
   using speed_cmd = trains::speed_cmd;
@@ -27,20 +32,21 @@ namespace tracks {
   using switch_dir_t = trains::switch_dir_t;
 
   struct sensor_read {
-    etl::string<3> sensor;
+    utils::sd_buffer<4> sensor;
     unsigned tick;
   };
 
   struct position_t {
-    etl::string<5> name {};
+    utils::sd_buffer<5> name;
     int offset {};
   };
 
   struct train_pos_init_msg {
     int train;
-    etl::string<5> name;
+    utils::sd_buffer<5> name;
     int offset;
   };
 
   using train_pos_goto_msg = train_pos_init_msg;
+  using train_deinit_msg = int;
 }  // namespace tracks

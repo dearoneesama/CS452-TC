@@ -91,11 +91,11 @@ void sensor_task() {
     sensor_msg.data.sensor[0] = module_char;
     if (offset < 10) {
       sensor_msg.data.sensor[1] = '0' + offset;
-      sensor_msg.data.sensor.uninitialized_resize(2);
+      sensor_msg.data.sensor[2] = '\0';
       } else {
       sensor_msg.data.sensor[1] = '0' + offset / 10;
       sensor_msg.data.sensor[2] = '0' + offset % 10;
-      sensor_msg.data.sensor.uninitialized_resize(3);
+      sensor_msg.data.sensor[3] = '\0';
     }
     sensor_msg.data.tick = tick;
     // stop distance experiment
@@ -148,7 +148,9 @@ void train_controller_task() {
   auto merklin_rx = TaskFinder(merklin::MERK_RX_SERVER_NAME);
   auto track_task = TaskFinder(tracks::TRACK_SERVER_TASK_NAME);
 
+#if DEBUG_PI == 0
   Create(PRIORITY_L2, sensor_task);
+#endif
   Create(PRIORITY_L2, switch_task);
   Create(PRIORITY_L2, reverse_task);
 

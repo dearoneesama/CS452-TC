@@ -21,6 +21,7 @@ const char *manual[] = {
   "rv <train_num>                         Set train to opposite direction",
   "sw <switch_num> S|C                    Set turnout direction",
   "init <train_num> <node_name> <offset>  Set train position for tracking",
+  "deinit <train_num>                     Remove train from tracking",
   "goto <train_num> <node_name> <offset>  Make train go to a position",
   "st                                     Stop all trains",
   "q                                      Quit",
@@ -88,7 +89,7 @@ void display_controller_task() {
   ::etl::circular_buffer<sensor_read, 12> sensor_reads;
   auto sensor_read_title_it = troll::it_transform(
     sensor_reads.rbegin(), sensor_reads.rend(),
-    [](sensor_read const &sr) { return sr.sensor; }
+    [](sensor_read const &sr) { return static_cast<::etl::string_view>(sr.sensor); }
   );
   auto sensor_read_tick_it = troll::it_transform(
     sensor_reads.rbegin(), sensor_reads.rend(),
@@ -247,7 +248,9 @@ void display_controller_task() {
         // do some special handling to avoid same sensor spamming screen
         auto num_reports = sensor_reads.size();
         auto &last = sensor_reads.back();
-        if (num_reports > 1 && last.sensor == data.sensor && sensor_reads[num_reports - 2].sensor == data.sensor) {
+        auto last_sensor = static_cast<::etl::string_view>(last.sensor);
+        auto data_sensor = static_cast<::etl::string_view>(data.sensor);
+        if (num_reports > 1 && last_sensor == data_sensor && sensor_reads[num_reports - 2].sensor == data_sensor) {
           // last.tick = data.tick; not necessary
           auto [row, col, patch] = sensor_tab.patch_str<1>(0, data.tick);
           takeover.enqueue(row + sensor_table_row, col + col_offset, patch.data());
@@ -406,22 +409,24 @@ void command_controller_task() {
           valid = replylen == 1 && reply == trains::tc_reply::OK;
         }
       } else if (troll::sscan(command_buffer.data, curr_size, "st")) {
-        valid = true;
-        for (auto train : tracks::valid_trains()) {
-          speed_cmd_msg.data.train = train;
-          speed_cmd_msg.data.speed = 0;
-          int replylen = SendValue(train_controller(), speed_cmd_msg, reply);
-          if (replylen != 1 || reply != trains::tc_reply::OK) {
-            valid = false;
-            break;
-          }
-        }
+        tracks::track_reply_msg reply {};
+        SendValue(track_task(), tracks::track_msg_header::TRAINS_STOP, reply);
+        valid = reply == tracks::track_reply_msg::OK;
       } else if (troll::sscan(command_buffer.data, curr_size, "init {} {} {}", arg1, str_arg, arg2)) {
         if (is_valid_train(arg1) && is_valid_node(str_arg) && is_valid_offset(arg2)) {
           tracks::track_reply_msg reply {};
           SendValue(track_task(), utils::enumed_class {
             tracks::track_msg_header::TRAIN_POS_INIT,
             tracks::train_pos_init_msg {arg1, str_arg, arg2},
+          }, reply);
+          valid = reply == tracks::track_reply_msg::OK;
+        }
+      } else if (troll::sscan(command_buffer.data, curr_size, "deinit {}", arg1)) {
+        if (is_valid_train(arg1)) {
+          tracks::track_reply_msg reply {};
+          SendValue(track_task(), utils::enumed_class {
+            tracks::track_msg_header::TRAIN_POS_DEINIT,
+            tracks::train_deinit_msg {arg1},
           }, reply);
           valid = reply == tracks::track_reply_msg::OK;
         }

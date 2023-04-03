@@ -40,19 +40,20 @@ using switch_read = tracks::switch_cmd;
 struct train_read {
   int num, cmd;
   tracks::position_t dest, pos;
-  fpm::fixed_16_16 speed, delta_t, delta_d;
+  fpm::fixed_24_8 speed, delta_t, delta_d;
 };
 
 template<class T>
-etl::string<11> stringify_pos(T const &pos) {
-  if (!pos.name.size()) {
+inline etl::string<11> stringify_pos(T const &pos) {
+  auto name = static_cast<etl::string_view>(pos.name);
+  if (!name.size()) {
     return "?";
   } else if (pos.offset == 0) {
     return pos.name;
   } else if (pos.offset < 0) {
-    return troll::sformat<11>("{}{}", pos.name.data(), pos.offset);
+    return troll::sformat<11>("{}{}", name, pos.offset);
   } else {
-    return troll::sformat<11>("{}+{}", pos.name.data(), pos.offset);
+    return troll::sformat<11>("{}+{}", name, pos.offset);
   }
 }
 
