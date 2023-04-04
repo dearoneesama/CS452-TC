@@ -1,20 +1,20 @@
 #pragma once
 
 #include <etl/string.h>
-#include "trains.hpp"
+#include "tcmd.hpp"
 #include "generic/utils.hpp"
 
-namespace tracks {
+namespace traffic {
 
   void init_tasks();
 
-  static const char * const TRACK_SERVER_TASK_NAME = "trackctl";
+  static const char * const TRAFFIC_SERVER_TASK_NAME = "trafficctl";
 
-  enum class track_reply_msg : char {
+  enum class traffic_reply_msg : char {
     OK = 'o',
   };
 
-  enum class track_msg_header : uint64_t {
+  enum class traffic_msg_header : uint64_t {
     TRAIN_SPEED_CMD,
     SWITCH_CMD,
     SENSOR_READ,
@@ -27,9 +27,9 @@ namespace tracks {
     TO_SWITCH_COURIER,
   };
 
-  using speed_cmd = trains::speed_cmd;
-  using switch_cmd = trains::switch_cmd;
-  using switch_dir_t = trains::switch_dir_t;
+  using speed_cmd = tcmd::speed_cmd;
+  using switch_cmd = tcmd::switch_cmd;
+  using switch_dir_t = tcmd::switch_dir_t;
 
   struct sensor_read {
     utils::sd_buffer<4> sensor;
@@ -49,4 +49,4 @@ namespace tracks {
 
   using train_pos_goto_msg = train_pos_init_msg;
   using train_deinit_msg = int;
-}  // namespace tracks
+}  // namespace traffic

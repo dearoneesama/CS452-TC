@@ -5,7 +5,7 @@
 #include "kern/user_syscall_typed.hpp"
 #include "generic/format.hpp"
 #include "generic/utils.hpp"
-#include "tracks.hpp"
+#include "traffic.hpp"
 
 namespace ui {
 
@@ -34,12 +34,12 @@ struct time_percentage_t {
   uint32_t idle;
 };
 
-using sensor_read = tracks::sensor_read;
-using switch_read = tracks::switch_cmd;
+using sensor_read = traffic::sensor_read;
+using switch_read = traffic::switch_cmd;
 
 struct train_read {
   int num, cmd;
-  tracks::position_t dest, pos;
+  traffic::position_t dest, pos;
   fpm::fixed_24_8 speed, delta_t, delta_d;
 };
 

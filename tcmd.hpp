@@ -2,7 +2,8 @@
 
 #include <cstdint>
 
-namespace trains {
+// old name: trains
+namespace tcmd {
 
 enum class tc_reply : char {
   OK = 0,
@@ -54,7 +55,7 @@ struct speed_cmd {
   int speed;
 };
 
-const char * const TRAIN_CONTROLLER_NAME = "trainctl";
+const char * const TRAIN_TASK_NAME = "traintt";
 const char * const REVERSE_TASK_NAME = "reverset";
 const char * const SWITCH_TASK_NAME = "switchtt";
 const char * const SENSOR_TASK_NAME = "sensortt";

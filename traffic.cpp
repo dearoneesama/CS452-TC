@@ -1,10 +1,12 @@
-#include "tracks.hpp"
+#include "traffic.hpp"
 #include "kern/user_syscall_typed.hpp"
 #include "ui.hpp"
 #include "track_consts.hpp"
 #include "track_graph.hpp"
 
-namespace tracks {
+using namespace tracks;
+
+namespace traffic {
 
   /**
    * how many ticks to wait before assuming a train has left a sensor.
@@ -55,11 +57,11 @@ namespace tracks {
     bool sitting_on_sensor {};
   };
 
-  using tc_courier_t = utils::courier_runner<
-    track_msg_header::TO_TC_COURIER,
-    sizeof(utils::enumed_class<trains::tc_msg_header, trains::speed_cmd>)
+  using train_courier_t = utils::courier_runner<
+    traffic_msg_header::TO_TC_COURIER,
+    sizeof(utils::enumed_class<tcmd::tc_msg_header, tcmd::speed_cmd>)
   >;
-  using switch_courier_t = utils::courier_runner<track_msg_header::TO_SWITCH_COURIER, sizeof(switch_cmd)>;
+  using switch_courier_t = utils::courier_runner<traffic_msg_header::TO_SWITCH_COURIER, sizeof(switch_cmd)>;
 
   /**
    * simulates the driver of one train.
@@ -70,7 +72,7 @@ namespace tracks {
      */
     internal_train_state *train;  // observer
     blocked_track_nodes_t *reserved_nodes;  // observer
-    tc_courier_t *tc_courier; // observer
+    train_courier_t *train_courier; // observer
     switch_courier_t *switch_courier; // observer
 
     /**
@@ -131,16 +133,16 @@ namespace tracks {
 
     void set_speed(int speed) {
       utils::enumed_class msg {
-        trains::tc_msg_header::SPEED,
-        trains::speed_cmd { train->num, speed },
+        tcmd::tc_msg_header::SPEED,
+        tcmd::speed_cmd { train->num, speed },
       };
-      tc_courier->push(msg);
+      train_courier->push(msg);
     }
 
     void set_switch(int sw, bool is_straight) {
       utils::enumed_class msg {
         sw,
-        is_straight ? trains::switch_dir_t::S : trains::switch_dir_t::C,
+        is_straight ? tcmd::switch_dir_t::S : tcmd::switch_dir_t::C,
       };
       switch_courier->push(msg);
     }
@@ -159,10 +161,10 @@ namespace tracks {
   };
 
   /**
-   * collection of information used to drive the track server.
+   * collection of information used to drive the traffic server.
    */
-  struct track_state {
-    track_state(tc_courier_t *tcc, switch_courier_t *swc) {
+  struct traffic_controller {
+    traffic_controller(train_courier_t *tcc, switch_courier_t *swc) {
       for (auto i : valid_trains()) {
         trains[i].num = {i};
         last_train_sensor_updates[i] = 0;
@@ -608,66 +610,66 @@ namespace tracks {
     }
   }
 
-  void track_server() {
-    RegisterAs(TRACK_SERVER_TASK_NAME);
+  void traffic_server() {
+    RegisterAs(TRAFFIC_SERVER_TASK_NAME);
     auto clock_server = TaskFinder("clock_server");
-    tc_courier_t tc_courier {
-      priority_t::PRIORITY_L1, trains::TRAIN_CONTROLLER_NAME,
+    train_courier_t train_courier {
+      priority_t::PRIORITY_L1, tcmd::TRAIN_TASK_NAME,
     };
     switch_courier_t switch_courier {
-      priority_t::PRIORITY_L1, trains::SWITCH_TASK_NAME,
+      priority_t::PRIORITY_L1, tcmd::SWITCH_TASK_NAME,
     };
-    track_state state {&tc_courier, &switch_courier};
+    traffic_controller state {&train_courier, &switch_courier};
 
-    utils::enumed_class<track_msg_header, char[128]> msg;
+    utils::enumed_class<traffic_msg_header, char[128]> msg;
     tid_t request_tid;
 
     while (true) {
-      tc_courier.try_reply();
+      train_courier.try_reply();
       switch_courier.try_reply();
 
       if (ReceiveValue(request_tid, msg) < 1) {
         continue;
       }
       switch (msg.header) {
-      case track_msg_header::TO_TC_COURIER:
-        tc_courier.make_ready();
+      case traffic_msg_header::TO_TC_COURIER:
+        train_courier.make_ready();
         break;
-      case track_msg_header::TO_SWITCH_COURIER:
+      case traffic_msg_header::TO_SWITCH_COURIER:
         switch_courier.make_ready();
         break;
-      case track_msg_header::TRAIN_SPEED_CMD:
+      case traffic_msg_header::TRAIN_SPEED_CMD:
         state.handle_speed_cmd(Time(clock_server()), msg.data_as<speed_cmd>());
         ReplyValue(request_tid, null_reply);
         break;
-      case track_msg_header::SWITCH_CMD:
+      case traffic_msg_header::SWITCH_CMD:
         state.handle_switch_cmd(msg.data_as<switch_cmd>());
         ReplyValue(request_tid, null_reply);
         break;
-      case track_msg_header::SENSOR_READ:
+      case traffic_msg_header::SENSOR_READ:
         state.handle_sensor_read(msg.data_as<sensor_read>());
         ReplyValue(request_tid, null_reply);
         break;
-      case track_msg_header::TRAIN_PREDICT:
+      case traffic_msg_header::TRAIN_PREDICT:
         state.handle_train_predict(Time(clock_server()));
         state.handle_train_driver();
         ReplyValue(request_tid, null_reply);
         break;
-      case track_msg_header::TRAIN_POS_INIT:
+      case traffic_msg_header::TRAIN_POS_INIT:
         state.handle_train_pos_init(msg.data_as<train_pos_init_msg>());
-        ReplyValue(request_tid, track_reply_msg::OK);
+        ReplyValue(request_tid, traffic_reply_msg::OK);
         break;
-      case track_msg_header::TRAIN_POS_DEINIT:
+      case traffic_msg_header::TRAIN_POS_DEINIT:
         state.handle_train_deinit(msg.data_as<train_deinit_msg>());
-        ReplyValue(request_tid, track_reply_msg::OK);
+        ReplyValue(request_tid, traffic_reply_msg::OK);
         break;
-      case track_msg_header::TRAIN_POS_GOTO:
+      case traffic_msg_header::TRAIN_POS_GOTO:
         state.handle_train_pos_goto(msg.data_as<train_pos_goto_msg>());
-        ReplyValue(request_tid, track_reply_msg::OK);
+        ReplyValue(request_tid, traffic_reply_msg::OK);
         break;
-      case track_msg_header::TRAINS_STOP:
+      case traffic_msg_header::TRAINS_STOP:
         state.handle_trains_stop();
-        ReplyValue(request_tid, track_reply_msg::OK);
+        ReplyValue(request_tid, traffic_reply_msg::OK);
         break;
       default:
         break;
@@ -676,17 +678,17 @@ namespace tracks {
   }
 
   void predict_timer() {
-    auto track_server = TaskFinder(TRACK_SERVER_TASK_NAME);
+    auto traffic_server = TaskFinder(TRAFFIC_SERVER_TASK_NAME);
     auto clock_server = TaskFinder("clock_server");
     while (true) {
       Delay(clock_server(), predict_react_interval);
-      SendValue(track_server(), track_msg_header::TRAIN_PREDICT, null_reply);
+      SendValue(traffic_server(), traffic_msg_header::TRAIN_PREDICT, null_reply);
     }
   }
 
   void init_tasks() {
     Create(priority_t::PRIORITY_L1, predict_timer);
-    Create(priority_t::PRIORITY_L1, track_server);
+    Create(priority_t::PRIORITY_L1, traffic_server);
   }
 
-} // namespace tracks
+} // namespace traffic

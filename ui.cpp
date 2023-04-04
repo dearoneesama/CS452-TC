@@ -3,7 +3,7 @@
 #include "ui.hpp"
 #include "kern/gtkterm.hpp"
 #include "kern/kstddefs.hpp"
-#include "trains.hpp"
+#include "tcmd.hpp"
 #include "generic/format_scan.hpp"
 #include "kern/rpi.hpp"
 #include "track_consts.hpp"
@@ -234,7 +234,7 @@ void display_controller_task() {
       }
       case display_msg_header::SWITCHES: { // we assume that only changing active switches will go through here
         auto &cmd = message.data_as<ui::switch_read>();
-        char dir = cmd.switch_dir == trains::switch_dir_t::C ? 'C' : 'S';
+        char dir = cmd.switch_dir == tcmd::switch_dir_t::C ? 'C' : 'S';
         int switch_num = cmd.switch_num;
         int offset = switch_num <= 18 ? 1 : 135;
         // patch table
@@ -329,16 +329,16 @@ void display_controller_task() {
 
 void command_controller_task() {
   auto gtkterm_rx = TaskFinder(gtkterm::GTK_RX_SERVER_NAME);
-  auto train_controller = TaskFinder(trains::TRAIN_CONTROLLER_NAME);
-  auto reverse_task = TaskFinder(trains::REVERSE_TASK_NAME);
-  auto switch_task = TaskFinder(trains::SWITCH_TASK_NAME);
-  auto track_task = TaskFinder(tracks::TRACK_SERVER_TASK_NAME);
+  auto train_task = TaskFinder(tcmd::TRAIN_TASK_NAME);
+  auto reverse_task = TaskFinder(tcmd::REVERSE_TASK_NAME);
+  auto switch_task = TaskFinder(tcmd::SWITCH_TASK_NAME);
+  auto traffic_task = TaskFinder(traffic::TRAFFIC_SERVER_TASK_NAME);
 
   utils::enumed_class<display_msg_header, char[64]> command_buffer;
   command_buffer.header = display_msg_header::USER_NOTICE;
 
   size_t curr_size = 0;
-  trains::tc_reply reply;
+  tcmd::tc_reply reply;
 
   auto is_valid_train = [](int arg) {
     auto &vt = tracks::valid_trains();
@@ -362,14 +362,14 @@ void command_controller_task() {
     return arg >= 0;
   };
 
-  utils::enumed_class<trains::tc_msg_header, trains::speed_cmd> speed_cmd_msg;
-  speed_cmd_msg.header = trains::tc_msg_header::SPEED;
+  utils::enumed_class<tcmd::tc_msg_header, tcmd::speed_cmd> speed_cmd_msg;
+  speed_cmd_msg.header = tcmd::tc_msg_header::SPEED;
 
-  trains::reverse_cmd rcmd = {0};
+  tcmd::reverse_cmd rcmd = {0};
 
-  utils::enumed_class<display_msg_header, trains::switch_cmd> switch_cmd_msg;
+  utils::enumed_class<display_msg_header, tcmd::switch_cmd> switch_cmd_msg;
   switch_cmd_msg.header = display_msg_header::SWITCHES;
-  switch_cmd_msg.data.switch_dir = trains::switch_dir_t::NONE;
+  switch_cmd_msg.data.switch_dir = tcmd::switch_dir_t::NONE;
   switch_cmd_msg.data.switch_num = 0;
 
   while (1) {
@@ -388,8 +388,8 @@ void command_controller_task() {
         if (is_valid_train(arg1) && is_valid_speed(arg2)) {
           speed_cmd_msg.data.train = arg1;
           speed_cmd_msg.data.speed = arg2;
-          int replylen = SendValue(train_controller(), speed_cmd_msg, reply);
-          if (replylen == 1 && reply == trains::tc_reply::OK) {
+          int replylen = SendValue(train_task(), speed_cmd_msg, reply);
+          if (replylen == 1 && reply == tcmd::tc_reply::OK) {
             valid = true;
           }
         }
@@ -397,47 +397,47 @@ void command_controller_task() {
         if (is_valid_train(arg1)) {
           rcmd.train = arg1;
           int replylen = SendValue(reverse_task(), rcmd, reply);
-          if (replylen == 1 && reply == trains::tc_reply::OK) {
+          if (replylen == 1 && reply == tcmd::tc_reply::OK) {
             valid = true;
           }
         }
       } else if (troll::sscan(command_buffer.data, curr_size, "sw {} {}", arg1, char_arg)) {
         if (is_valid_solenoid(arg1) && is_valid_solenoid_dir(char_arg)) {
           switch_cmd_msg.data.switch_num = arg1;
-          switch_cmd_msg.data.switch_dir = char_arg == 'S' ? trains::switch_dir_t::S : trains::switch_dir_t::C;
+          switch_cmd_msg.data.switch_dir = char_arg == 'S' ? tcmd::switch_dir_t::S : tcmd::switch_dir_t::C;
           int replylen = SendValue(switch_task(), switch_cmd_msg.data, reply);
-          valid = replylen == 1 && reply == trains::tc_reply::OK;
+          valid = replylen == 1 && reply == tcmd::tc_reply::OK;
         }
       } else if (troll::sscan(command_buffer.data, curr_size, "st")) {
-        tracks::track_reply_msg reply {};
-        SendValue(track_task(), tracks::track_msg_header::TRAINS_STOP, reply);
-        valid = reply == tracks::track_reply_msg::OK;
+        traffic::traffic_reply_msg reply {};
+        SendValue(traffic_task(), traffic::traffic_msg_header::TRAINS_STOP, reply);
+        valid = reply == traffic::traffic_reply_msg::OK;
       } else if (troll::sscan(command_buffer.data, curr_size, "init {} {} {}", arg1, str_arg, arg2)) {
         if (is_valid_train(arg1) && is_valid_node(str_arg) && is_valid_offset(arg2)) {
-          tracks::track_reply_msg reply {};
-          SendValue(track_task(), utils::enumed_class {
-            tracks::track_msg_header::TRAIN_POS_INIT,
-            tracks::train_pos_init_msg {arg1, str_arg, arg2},
+          traffic::traffic_reply_msg reply {};
+          SendValue(traffic_task(), utils::enumed_class {
+            traffic::traffic_msg_header::TRAIN_POS_INIT,
+            traffic::train_pos_init_msg {arg1, str_arg, arg2},
           }, reply);
-          valid = reply == tracks::track_reply_msg::OK;
+          valid = reply == traffic::traffic_reply_msg::OK;
         }
       } else if (troll::sscan(command_buffer.data, curr_size, "deinit {}", arg1)) {
         if (is_valid_train(arg1)) {
-          tracks::track_reply_msg reply {};
-          SendValue(track_task(), utils::enumed_class {
-            tracks::track_msg_header::TRAIN_POS_DEINIT,
-            tracks::train_deinit_msg {arg1},
+          traffic::traffic_reply_msg reply {};
+          SendValue(traffic_task(), utils::enumed_class {
+            traffic::traffic_msg_header::TRAIN_POS_DEINIT,
+            traffic::train_deinit_msg {arg1},
           }, reply);
-          valid = reply == tracks::track_reply_msg::OK;
+          valid = reply == traffic::traffic_reply_msg::OK;
         }
       } else if (troll::sscan(command_buffer.data, curr_size, "goto {} {} {}", arg1, str_arg, arg2)) {
         if (is_valid_train(arg1) && is_valid_node(str_arg) && is_valid_offset(arg2)) {
-          tracks::track_reply_msg reply {};
-          SendValue(track_task(), utils::enumed_class {
-            tracks::track_msg_header::TRAIN_POS_GOTO,
-            tracks::train_pos_goto_msg {arg1, str_arg, arg2},
+          traffic::traffic_reply_msg reply {};
+          SendValue(traffic_task(), utils::enumed_class {
+            traffic::traffic_msg_header::TRAIN_POS_GOTO,
+            traffic::train_pos_goto_msg {arg1, str_arg, arg2},
           }, reply);
-          valid = reply == tracks::track_reply_msg::OK;
+          valid = reply == traffic::traffic_reply_msg::OK;
         }
       } else if (curr_size == 1 && command_buffer.data[0] == 'q') {
         Terminate();
@@ -538,45 +538,45 @@ void idle_task() {
 }
 
 void initialize() {
-  auto train_controller = TaskFinder(trains::TRAIN_CONTROLLER_NAME);
-  auto switch_task = TaskFinder(trains::SWITCH_TASK_NAME);
+  auto train_task = TaskFinder(tcmd::TRAIN_TASK_NAME);
+  auto switch_task = TaskFinder(tcmd::SWITCH_TASK_NAME);
 
   out().send_notice("Initializing...");
 
-  trains::tc_reply reply;
-  int replylen = SendValue(train_controller(), trains::tc_msg_header::GO_CMD, reply);
-  if (replylen != 1 || reply != trains::tc_reply::OK) {
+  tcmd::tc_reply reply;
+  int replylen = SendValue(train_task(), tcmd::tc_msg_header::GO_CMD, reply);
+  if (replylen != 1 || reply != tcmd::tc_reply::OK) {
     out().send_notice("Could not send GO command\r\n");
     return;
   }
 
-  replylen = SendValue(train_controller(), trains::tc_msg_header::SET_RESET_MODE, reply);
-  if (replylen != 1 || reply != trains::tc_reply::OK) {
+  replylen = SendValue(train_task(), tcmd::tc_msg_header::SET_RESET_MODE, reply);
+  if (replylen != 1 || reply != tcmd::tc_reply::OK) {
     out().send_notice("Could not send RESET MODE command\r\n");
     return;
   }
 
-  utils::enumed_class<trains::tc_msg_header, trains::speed_cmd> speed_cmd_msg;
-  speed_cmd_msg.header = trains::tc_msg_header::SPEED;
+  utils::enumed_class<tcmd::tc_msg_header, tcmd::speed_cmd> speed_cmd_msg;
+  speed_cmd_msg.header = tcmd::tc_msg_header::SPEED;
   speed_cmd_msg.data.speed = 16;
 
   for (auto train : tracks::valid_trains()) {
     speed_cmd_msg.data.train = train;
-    SendValue(train_controller(), speed_cmd_msg, reply);
-    if (replylen != 1 || reply != trains::tc_reply::OK) {
+    SendValue(train_task(), speed_cmd_msg, reply);
+    if (replylen != 1 || reply != tcmd::tc_reply::OK) {
       out().send_notice("Could not send SPEED command");
       return;
     }
   }
 
-  utils::enumed_class<display_msg_header, trains::switch_cmd> switch_cmd_msg;
+  utils::enumed_class<display_msg_header, tcmd::switch_cmd> switch_cmd_msg;
   switch_cmd_msg.header = display_msg_header::SWITCHES;
 
   for (auto sw : tracks::valid_switches()) {
     switch_cmd_msg.data.switch_num = sw;
-    switch_cmd_msg.data.switch_dir = trains::switch_dir_t::S;
+    switch_cmd_msg.data.switch_dir = tcmd::switch_dir_t::S;
     replylen = SendValue(switch_task(), switch_cmd_msg.data, reply);
-    if (replylen != 1 || reply != trains::tc_reply::OK) {
+    if (replylen != 1 || reply != tcmd::tc_reply::OK) {
       out().send_notice("Could not send SWITCH command");
       return;
     }

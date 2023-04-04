@@ -1,10 +1,10 @@
-#include "trains.hpp"
+#include "tcmd.hpp"
 #include "kern/merklin.hpp"
 #include "kern/user_syscall_typed.hpp"
 #include "ui.hpp"
 #include "generic/utils.hpp"
 
-namespace trains {
+namespace tcmd {
 
 void switch_expire_timer() {
   tid_t switch_task = MyParentTid();
@@ -81,13 +81,13 @@ void reverse_task() {
 
 void sensor_task() {
   RegisterAs(SENSOR_TASK_NAME);
-  auto track_task = TaskFinder(tracks::TRACK_SERVER_TASK_NAME);
+  auto traffic_task = TaskFinder(traffic::TRAFFIC_SERVER_TASK_NAME);
   auto clock_server = TaskFinder("clock_server");
   tid_t train_controller = MyParentTid();
 
-  auto send_sensor = [&track_task/*, &train_controller*/] (int tick, char module_char, int offset) {
-    utils::enumed_class<tracks::track_msg_header, tracks::sensor_read> sensor_msg;
-    sensor_msg.header = tracks::track_msg_header::SENSOR_READ;
+  auto send_sensor = [&traffic_task/*, &train_controller*/] (int tick, char module_char, int offset) {
+    utils::enumed_class<traffic::traffic_msg_header, traffic::sensor_read> sensor_msg;
+    sensor_msg.header = traffic::traffic_msg_header::SENSOR_READ;
     sensor_msg.data.sensor[0] = module_char;
     if (offset < 10) {
       sensor_msg.data.sensor[1] = '0' + offset;
@@ -106,7 +106,7 @@ void sensor_task() {
       }, null_reply);
       ui::send_notice("automatically sent stop command");
     }*/
-    SendValue(track_task(), sensor_msg, null_reply);
+    SendValue(traffic_task(), sensor_msg, null_reply);
   };
 
   char sensor_bytes[10] = {0};
@@ -142,11 +142,12 @@ void sensor_task() {
   }
 }
 
-void train_controller_task() {
-  RegisterAs(TRAIN_CONTROLLER_NAME);
+// old name: train_controller_task
+void train_task() {
+  RegisterAs(TRAIN_TASK_NAME);
   auto merklin_tx = TaskFinder(merklin::MERK_TX_SERVER_NAME);
   auto merklin_rx = TaskFinder(merklin::MERK_RX_SERVER_NAME);
-  auto track_task = TaskFinder(tracks::TRACK_SERVER_TASK_NAME);
+  auto traffic_task = TaskFinder(traffic::TRAFFIC_SERVER_TASK_NAME);
 
 #if DEBUG_PI == 0
   Create(PRIORITY_L2, sensor_task);
@@ -171,18 +172,18 @@ void train_controller_task() {
     switch_directions[i] = switch_dir_t::NONE;
   }
 
-  auto send_train_speed = [&train_speeds, &merklin_tx, &track_task, &request_tid] (int train_num, int speed) {
+  auto send_train_speed = [&train_speeds, &merklin_tx, &traffic_task, &request_tid] (int train_num, int speed) {
     Putc(merklin_tx(), 1, (char)speed);
     Putc(merklin_tx(), 1, (char)train_num);
 
     // track task may send cmds back to me so unblock it first
     ReplyValue(request_tid, tc_reply::OK);
 
-    utils::enumed_class track_msg {
-      tracks::track_msg_header::TRAIN_SPEED_CMD,
-      tracks::speed_cmd { train_num, speed },
+    utils::enumed_class traffic_msg {
+      traffic::traffic_msg_header::TRAIN_SPEED_CMD,
+      traffic::speed_cmd { train_num, speed },
     };
-    SendValue(track_task(), track_msg, null_reply);
+    SendValue(traffic_task(), traffic_msg, null_reply);
   };
 
   while (1) {
@@ -235,9 +236,9 @@ void train_controller_task() {
           switch_directions[cmd.switch_num] = cmd.switch_dir;
           ReplyValue(request_tid, tc_reply::OK);
           //
-          SendValue(track_task(), utils::enumed_class {
-            tracks::track_msg_header::SWITCH_CMD,
-            tracks::switch_cmd { cmd.switch_num, cmd.switch_dir },
+          SendValue(traffic_task(), utils::enumed_class {
+            traffic::traffic_msg_header::SWITCH_CMD,
+            traffic::switch_cmd { cmd.switch_num, cmd.switch_dir },
           }, null_reply);
 
         }
@@ -277,7 +278,7 @@ void train_controller_task() {
 }
 
 void init_tasks() {
-  Create(PRIORITY_L1, train_controller_task);
+  Create(PRIORITY_L1, train_task);
 }
 
-}
+}  // namespace tcmd
