@@ -361,6 +361,13 @@ void command_controller_task() {
   auto is_valid_offset = [](int arg) {
     return arg >= 0;
   };
+  auto toupper_str = [](etl::istring &s) {
+    for (auto &c : s) {
+      if ('a' <= c && c <= 'z') {
+        c = c - 'a' + 'A';
+      }
+    }
+  };
 
   utils::enumed_class<tcmd::tc_msg_header, tcmd::speed_cmd> speed_cmd_msg;
   speed_cmd_msg.header = tcmd::tc_msg_header::SPEED;
@@ -413,6 +420,7 @@ void command_controller_task() {
         SendValue(traffic_task(), traffic::traffic_msg_header::TRAINS_STOP, reply);
         valid = reply == traffic::traffic_reply_msg::OK;
       } else if (troll::sscan(command_buffer.data, curr_size, "init {} {} {}", arg1, str_arg, arg2)) {
+        toupper_str(str_arg);
         if (is_valid_train(arg1) && is_valid_node(str_arg) && is_valid_offset(arg2)) {
           traffic::traffic_reply_msg reply {};
           SendValue(traffic_task(), utils::enumed_class {
@@ -431,6 +439,7 @@ void command_controller_task() {
           valid = reply == traffic::traffic_reply_msg::OK;
         }
       } else if (troll::sscan(command_buffer.data, curr_size, "goto {} {} {}", arg1, str_arg, arg2)) {
+        toupper_str(str_arg);
         if (is_valid_train(arg1) && is_valid_node(str_arg) && is_valid_offset(arg2)) {
           traffic::traffic_reply_msg reply {};
           SendValue(traffic_task(), utils::enumed_class {

@@ -87,7 +87,7 @@ namespace traffic {
       dest = {};
       path = etl::nullopt;
       state = THINKING;
-      set_speed(0);
+      set_speed(16);
     }
 
     /**
