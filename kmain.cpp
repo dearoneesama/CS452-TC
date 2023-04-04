@@ -5,7 +5,7 @@
 #include "kern/timer.hpp"
 #include "kern/irq.include"
 #include "kern/gpio.hpp"
-#include "format.hpp"
+#include "generic/format.hpp"
 
 void initialize() {
   // run static/global constructors manually

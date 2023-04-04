@@ -4,7 +4,7 @@
 #include <utility>
 #include <iterator>
 #include <etl/queue.h>
-#include "kern/user_syscall_typed.hpp"
+#include "../kern/user_syscall_typed.hpp"
 #include "format.hpp"
 
 namespace utils {

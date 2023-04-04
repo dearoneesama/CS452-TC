@@ -11,7 +11,7 @@ CFLAGS_LIB:=-g -pipe -static -fno-builtin \
 	-Wno-return-type -I $(CATCH_DIR)
 CFLAGS:=$(CFLAGS_LIB) $(WARNINGS) -DIS_TRACK_A=1
 
-SOURCES := $(wildcard *.cpp) $(CATCH_DIR)/catch_amalgamated.cpp ../track_new.cpp ../track_graph.cpp ../track_consts.cpp ../format.cpp
+SOURCES := $(wildcard *.cpp) $(CATCH_DIR)/catch_amalgamated.cpp ../track_new.cpp ../track_graph.cpp ../track_consts.cpp ../generic/format.cpp
 # Create .o and .d files for every .cpp
 OBJECTS := $(patsubst %, $(OUTPUT)/%, $(patsubst %.cpp, %.o, $(notdir $(SOURCES))))
 DEPENDS := $(patsubst %, $(OUTPUT)/%, $(patsubst %.cpp, %.d, $(notdir $(SOURCES))))
@@ -28,6 +28,9 @@ $(OUTPUT)/catch_amalgamated.o: $(CATCH_DIR)/catch_amalgamated.cpp Makefile
 	$(CXX) $(CFLAGS_LIB) -MMD -MP -c $< -o $@
 
 $(OUTPUT)/%.o: ../%.cpp Makefile
+	$(CXX) $(CFLAGS) -MMD -MP -c $< -o $@
+
+$(OUTPUT)/%.o: ../generic/%.cpp Makefile
 	$(CXX) $(CFLAGS) -MMD -MP -c $< -o $@
 
 $(OUTPUT)/%.o: %.cpp Makefile

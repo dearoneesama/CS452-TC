@@ -1,6 +1,6 @@
 #include <catch_amalgamated.hpp>
 #include <etl/string_view.h>
-#include "../format_scan.hpp"
+#include "../generic/format_scan.hpp"
 
 TEST_CASE("sscan usage", "[sscan]") {
   REQUIRE(troll::sscan("abcde", "abcde"));

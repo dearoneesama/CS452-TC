@@ -1,6 +1,6 @@
 #include <etl/queue.h>
-#include "../containers.hpp"
-#include "../utils.hpp"
+#include "../generic/containers.hpp"
+#include "../generic/utils.hpp"
 #include "servers.hpp"
 #include "kstddefs.hpp"
 #include "user_syscall_typed.hpp"

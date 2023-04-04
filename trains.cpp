@@ -2,7 +2,7 @@
 #include "kern/merklin.hpp"
 #include "kern/user_syscall_typed.hpp"
 #include "ui.hpp"
-#include "utils.hpp"
+#include "generic/utils.hpp"
 
 namespace trains {
 

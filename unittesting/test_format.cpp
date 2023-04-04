@@ -1,7 +1,7 @@
 #include <catch_amalgamated.hpp>
 #include <etl/string_view.h>
-#include "../format.hpp"
-#include "../utils.hpp"
+#include "../generic/format.hpp"
+#include "../generic/utils.hpp"
 
 TEST_CASE("sformat usage", "[format]") {
   char s[50];

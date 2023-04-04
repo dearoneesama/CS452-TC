@@ -2,10 +2,10 @@
 
 #include "kern/rpi.hpp"
 #include "kern/user_syscall_typed.hpp"
-#include "format.hpp"
+#include "generic/format.hpp"
 #include "kern/servers.hpp"
 #include "kern/notifiers.hpp"
-#include "format_scan.hpp"
+#include "generic/format_scan.hpp"
 #include "ui.hpp"
 #include "kern/merklin.hpp"
 #include "kern/gtkterm.hpp"

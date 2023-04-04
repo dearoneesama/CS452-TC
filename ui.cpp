@@ -4,7 +4,7 @@
 #include "kern/gtkterm.hpp"
 #include "kern/kstddefs.hpp"
 #include "trains.hpp"
-#include "format_scan.hpp"
+#include "generic/format_scan.hpp"
 #include "kern/rpi.hpp"
 #include "track_consts.hpp"
 

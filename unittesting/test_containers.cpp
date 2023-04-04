@@ -1,5 +1,5 @@
 #include <catch_amalgamated.hpp>
-#include "../containers.hpp"
+#include "../generic/containers.hpp"
 
 struct test_elem : public troll::forward_link {
   alignas(16) char mark;

@@ -3,8 +3,8 @@
 #include <fpm/fixed.hpp>
 #include "kern/kstddefs.hpp"
 #include "kern/user_syscall_typed.hpp"
-#include "format.hpp"
-#include "utils.hpp"
+#include "generic/format.hpp"
+#include "generic/utils.hpp"
 #include "tracks.hpp"
 
 namespace ui {

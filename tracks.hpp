@@ -2,7 +2,7 @@
 
 #include <etl/string.h>
 #include "trains.hpp"
-#include "utils.hpp"
+#include "generic/utils.hpp"
 
 namespace tracks {
 
