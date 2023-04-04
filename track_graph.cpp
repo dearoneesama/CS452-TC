@@ -19,7 +19,7 @@ namespace tracks {
           curr_sensor = curr_sensor->edge[DIR_AHEAD].dest;
           break;
         case NODE_BRANCH: {
-          auto dir = switches.at(curr_sensor->num) == traffic::switch_dir_t::S ? DIR_STRAIGHT : DIR_CURVED;
+          auto dir = switches.at(curr_sensor->num) == switch_dir_t::S ? DIR_STRAIGHT : DIR_CURVED;
           dist += curr_sensor->edge[dir].dist;
           curr_sensor = curr_sensor->edge[dir].dest;
           break;
@@ -109,7 +109,7 @@ namespace tracks {
         result.emplace_back();
         segment = &std::get<0>(result.at(idx));
       } else if (last->type == NODE_BRANCH) {
-        auto dir = get_switch_dir(last, curr) == traffic::switch_dir_t::S ? DIR_STRAIGHT : DIR_CURVED;
+        auto dir = get_switch_dir(last, curr) == switch_dir_t::S ? DIR_STRAIGHT : DIR_CURVED;
         std::get<1>(result.at(idx)) += last->edge[dir].dist;
       } else {
         std::get<1>(result.at(idx)) += last->edge[DIR_AHEAD].dist;
@@ -137,7 +137,7 @@ namespace tracks {
     return len;
   }
 
-  traffic::switch_dir_t get_switch_dir(const track_node *sw, const track_node *next) {
-    return sw->edge[DIR_STRAIGHT].dest == next ? traffic::switch_dir_t::S : traffic::switch_dir_t::C;
+  switch_dir_t get_switch_dir(const track_node *sw, const track_node *next) {
+    return sw->edge[DIR_STRAIGHT].dest == next ? switch_dir_t::S : switch_dir_t::C;
   }
 }

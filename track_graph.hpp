@@ -2,11 +2,12 @@
 
 #include <tuple>
 #include <etl/optional.h>
+#include "tcmd.hpp"
 #include "track_consts.hpp"
-#include "traffic.hpp"
 
 namespace tracks {
-  using switch_status_t = etl::unordered_map<int, traffic::switch_dir_t, num_switches>;
+  using switch_dir_t = tcmd::switch_dir_t;
+  using switch_status_t = etl::unordered_map<int, switch_dir_t, num_switches>;
   using blocked_track_nodes_t = etl::unordered_set<const track_node *, TRACK_MAX>;
 
   /**
@@ -50,5 +51,5 @@ namespace tracks {
   /**
    * given a switch and a node next to it. which direction of the switch should be taken?
    */
-  traffic::switch_dir_t get_switch_dir(const track_node *sw, const track_node *next);
+  switch_dir_t get_switch_dir(const track_node *sw, const track_node *next);
 }
