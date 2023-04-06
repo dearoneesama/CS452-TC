@@ -15,7 +15,7 @@ namespace tracks {
 #if IS_TRACK_A == 1
       156,
 #else
-      4, 5, 7, 153, 154, 155, 156, 
+      4, 5, 7,
 #endif
     };
     return broken_switches;

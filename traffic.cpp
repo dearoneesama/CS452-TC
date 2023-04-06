@@ -348,8 +348,8 @@ namespace traffic {
         })
       ));
 
-      driver.i = /*driver.j =*/ 0;
-      driver.state = mini_driver::ACCEL_TO_START_SEGMENT;
+      driver.i = driver.j = 0;
+      driver.state = mini_driver::ENROUTE_ACCEL_TO_START_SEGMENT;
       driver.dest = { msg.name, msg.offset };
       send_train_ui_msg(train);
     }

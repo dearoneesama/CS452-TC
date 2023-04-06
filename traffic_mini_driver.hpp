@@ -30,7 +30,7 @@ namespace traffic {
     /**
      * current node in path.
      */
-    size_t i {}/*, j {}*/;
+    size_t i {}, j {};
     /**
      * final destination. {} means not set.
      */
@@ -48,21 +48,22 @@ namespace traffic {
       // noop
       THINKING = 0,
       // when starting a new path segment, do acceleration
-      ACCEL_TO_START_SEGMENT,
-      RUNNING_SEGMENT,
-      BREAKING,
-      END_SEGMENT,
-      WAITING_TO_REVERSE,
+      ENROUTE_ACCEL_TO_START_SEGMENT,
+      ENROUTE_RUNNING_SEGMENT,
+      ENROUTE_BREAKING,
+      ENROUTE_END_SEGMENT,
+      ENROUTE_WAITING_TO_REVERSE,
       // if we need to go to sensor but end up not being at the sensor, reaccelerate
-      // fix it
-      ACCEL_TO_FIX_SENSOR,
-      FIXING_SENSOR,
+      // to fix it.
+      FIX_RUNNING_UP,
+      FIX_WAITING_TO_REVERSE_1,
+      FIX_RUNNING_BACK,
+      FIX_WAITING_TO_REVERSE_2,
     } state {};
 
     void reset() {
       path = etl::nullopt;
-      i = 0;
-      // j = 0;
+      i = j = 0;
       dest = {};
       braking_dist = 0;
       state = THINKING;
@@ -89,6 +90,8 @@ namespace traffic {
       state = THINKING;
       set_speed(16);
     }
+
+    void switch_ahead_on_demand();
 
     /**
      * do an action and advances state.

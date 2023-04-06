@@ -57,7 +57,7 @@ namespace traffic {
   /**
    * how many ticks to wait before assuming a train has left a sensor.
    */
-  static constexpr auto train_sensor_expire_timeout = 50;
+  static constexpr auto train_sensor_expire_timeout = 20;
 
   static constexpr auto predict_react_interval = 15;  // 150 ms
 
@@ -98,6 +98,8 @@ namespace traffic {
     snapshot_t tick_snap {};
 
     // train is approaching source sensor instead of leaving?
+    // this should be rarely used only when train is at the end of the track...
+    // where there is no new sensor to base from
     bool approaching_sensor {};
     // train is on the sensor thus spamming lots of sensor reads?
     bool sitting_on_sensor {};
