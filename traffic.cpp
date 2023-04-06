@@ -68,7 +68,19 @@ namespace traffic {
           train.sensor_snap.pos.offset = 0;
           train.tick_snap.pos.offset = -train.tick_snap.pos.offset;
         } else {
-          train.approaching_sensor = !train.approaching_sensor;
+          auto next_sensor_op = next_sensor(valid_nodes().at(train.tick_snap.pos.name), switches);
+          if (next_sensor_op) {
+            // if train is at A+x, after reverse, change it to B+y, where B is next sensor
+            // and y is dist-x
+            train.sensor_snap.pos.name = train.tick_snap.pos.name = std::get<0>(*next_sensor_op)->reverse->name;
+            train.sensor_snap.pos.offset = 0;
+            train.tick_snap.pos.offset = std::get<1>(*next_sensor_op) - train.tick_snap.pos.offset;
+          } else {
+            train.approaching_sensor = !train.approaching_sensor;
+            ui::out().send_notice(troll::sformat<60>(
+              "After reversal, train {} cannot change base sensor.", train.num
+            ));
+          }
         }
       } else if (train.cmd == 15) {
         train.lo_to_hi = true;
