@@ -345,7 +345,7 @@ extern "C" void* memcpy(void* __restrict__ dest, const void* __restrict__ src, s
   auto src_mod = (uintptr_t)src & 7;
   if (
     n < 8  // too small
-    || (dest_mod && dest_mod != src_mod) // never aligns
+    || ((dest_mod || src_mod) && dest_mod != src_mod) // never aligns
   ) {
     while (n--) *(cdest++) = *(csrc++);
     return dest;
