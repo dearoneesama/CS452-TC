@@ -44,6 +44,8 @@ constexpr char UART_TLR       = 0x07; // R/W - only accessible when EFR[4] = 1 a
 } // namespace rpi
 
 void uart_write_register(size_t spiChannel, size_t uartChannel, char reg, char data);
+// "prepare" starts from index 1,
+void uart_write_register(size_t spi_channel, size_t uart_channel, char reg, char *prepare, size_t len);
 char uart_read_register(size_t spiChannel, size_t uartChannel, char reg);
 
 uint32_t read_gpeds();

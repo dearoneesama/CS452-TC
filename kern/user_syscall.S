@@ -90,6 +90,12 @@ UartWriteRegister:
     svc SYSCALLN_UARTWRITE
     ret
 
+.global UartWriteRegisterN
+.balign 16
+UartWriteRegisterN:
+    svc SYSCALLN_UARTWRITEN
+    ret
+
 .global UartReadRegister
 .balign 16
 UartReadRegister:

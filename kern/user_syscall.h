@@ -37,6 +37,8 @@ extern "C" void SaveThePlanet();
 
 // uart
 extern "C" int UartWriteRegister(int channel, char reg, char data);
+// "data" must start from index 1, and index 0 is used for something else internally
+extern "C" int UartWriteRegisterN(int channel, char reg, const char* data, size_t len);
 extern "C" int UartReadRegister(int channel, char reg);
 int Getc(int tid, int channel);
 int Putc(int tid, int channel, char c);

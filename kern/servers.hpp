@@ -43,3 +43,26 @@ enum class CLOCK_REPLY : char {
 };
 
 void clockserver();
+
+static constexpr size_t MAX_UART_MESSAGE_SIZE = 1024;
+
+enum class UART_MESSAGE : uint64_t {
+  PUTC,
+  PUTS,
+  GETC,
+  DELAY_NOTIFIER,
+  TX_NOTIFIER,
+  RX_NOTIFIER,
+  CTS_NOTIFIER,
+};
+
+using uart_putc_message = char;
+
+struct uart_puts_message {
+  uint64_t data_size;
+  char data[MAX_UART_MESSAGE_SIZE];
+};
+
+enum class UART_REPLY : char {
+  OK = 'o',
+};

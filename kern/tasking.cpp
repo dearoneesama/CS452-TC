@@ -257,6 +257,16 @@ void task_manager::k_uart_write(task_descriptor *curr_task) {
   ready_push(curr_task);
 }
 
+void task_manager::k_uart_write_n(task_descriptor *curr_task) {
+  int uart_channel = curr_task->context.registers[0];
+  char reg = curr_task->context.registers[1];
+  auto *data = reinterpret_cast<char *>(curr_task->context.registers[2]);
+  int len = curr_task->context.registers[3];
+  uart_write_register(0, uart_channel, reg, data, len);
+  curr_task->context.registers[0] = 0;
+  ready_push(curr_task);
+}
+
 void task_manager::kp_dcache(task_descriptor *curr_task) {
   kernel::enable_dcache();
   ready_push(curr_task);

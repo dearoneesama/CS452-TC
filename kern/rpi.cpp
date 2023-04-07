@@ -216,6 +216,11 @@ void uart_write_register(size_t spiChannel, size_t uartChannel, char reg, char d
   spi_send_recv(spiChannel, req, 2, NULL, 0);
 }
 
+void uart_write_register(size_t spi_channel, size_t uart_channel, char reg, char *prepare, size_t len) {
+  prepare[0] = (uart_channel << UART_CHANNEL_SHIFT) | (reg << UART_ADDR_SHIFT);
+  spi_send_recv(spi_channel, prepare, len + 1, nullptr, 0);
+}
+
 char uart_read_register(size_t spiChannel, size_t uartChannel, char reg) {
   char req[2] = {0};
   char res[2] = {0};
