@@ -140,4 +140,60 @@ namespace tracks {
   switch_dir_t get_switch_dir(const track_node *sw, const track_node *next) {
     return sw->edge[DIR_STRAIGHT].dest == next ? switch_dir_t::S : switch_dir_t::C;
   }
+
+  node_path_segment_vec_t
+  walk_sensor(const track_node *node, int offset, int dist, const switch_status_t &switches) {
+    node_path_segment_vec_t result;
+    result.push_back(node);
+    auto remain = dist + offset;
+    while (remain > 0) {
+      auto next = next_sensor(node, switches);
+      if (next) {
+        result.push_back(node = std::get<0>(*next));
+        remain -= std::get<1>(*next);
+      } else {
+        break;
+      }
+    }
+    return result;
+  }
+
+  node_path_segment_vec_t
+  walk_sensor(
+    size_t j,
+    int offset,
+    int dist,
+    const std::tuple_element_t<0, node_path_segment_t> &seg,
+    const switch_status_t &switches
+  ) {
+    node_path_segment_vec_t result;
+    result.push_back(seg.at(j));
+    auto remain = dist + offset;
+    auto sensor_remain = remain;
+    for (++j; j < seg.size(); ++j) {
+      if (seg[j - 1]->type == NODE_BRANCH) {
+        auto dir = get_switch_dir(seg[j - 1], seg[j]) == switch_dir_t::S ? DIR_STRAIGHT : DIR_CURVED;
+        remain -= seg[j - 1]->edge[dir].dist;
+      } else {
+        remain -= seg[j - 1]->edge[DIR_AHEAD].dist;
+      }
+      if (seg[j]->type == NODE_SENSOR) {
+        result.push_back(seg[j]);
+        sensor_remain = remain;
+        if (remain <= 0) {
+          break;
+        }
+      }
+    }
+    while (sensor_remain > 0) {
+      auto next = next_sensor(result.back(), switches);
+      if (next) {
+        sensor_remain -= std::get<1>(*next);
+        result.push_back(std::get<0>(*next));
+      } else {
+        break;
+      }
+    }
+    return result;
+  }
 }

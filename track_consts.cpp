@@ -206,7 +206,7 @@ namespace tracks {
     auto v = train_speed(train, steady_speed_level, 0);
     auto a_accel = train_acceleration(train, steady_speed_level, 0);
     auto a_deaccel = train_acceleration(train, 0, steady_speed_level);
-    if (a_accel == fp{}) {
+    if (a_accel == fp{} || a_deaccel == fp{}) {
       return { 0, 0 };
     }
     // v^2 = 2as
@@ -218,7 +218,7 @@ namespace tracks {
     auto v = train_speed(train, steady_speed_level, 0);
     auto a_accel = train_acceleration(train, steady_speed_level, 0);
     auto a_deaccel = train_acceleration(train, 0, steady_speed_level);
-    if (a_accel == fp{}) {
+    if (a_accel == fp{} || a_deaccel == fp{}) {
       return { fp{}, fp{} };
     }
     // v = at

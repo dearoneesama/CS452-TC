@@ -19,7 +19,8 @@ namespace tracks {
   constexpr size_t max_path_segment_len = TRACK_MAX / 2;
   constexpr size_t max_path_segments = 4;
 
-  using node_path_segment_t = std::tuple<etl::vector<const track_node *, max_path_segment_len>, int>;
+  using node_path_segment_vec_t = etl::vector<const track_node *, max_path_segment_len>;
+  using node_path_segment_t = std::tuple<node_path_segment_vec_t, int>;
   using node_path_reversal_ok_t = etl::vector<node_path_segment_t, max_path_segments>;
 
   /**
@@ -52,4 +53,24 @@ namespace tracks {
    * given a switch and a node next to it. which direction of the switch should be taken?
    */
   switch_dir_t get_switch_dir(const track_node *sw, const track_node *next);
+
+  /**
+   * walk to a sensor node that is at least `dist` away, or the farthest one if that is not possible,
+   * following switches.
+   */
+  node_path_segment_vec_t
+  walk_sensor(const track_node *node, int offset, int dist, const switch_status_t &switches);
+
+  /**
+   * walk to a sensor node that is at least `dist` away, or the farthest one if that is not possible,
+   * following provided path segment.
+   */
+  node_path_segment_vec_t
+  walk_sensor(
+    size_t j,
+    int offset,
+    int dist,
+    const std::tuple_element_t<0, node_path_segment_t> &seg,
+    const switch_status_t &switches
+  );
 }

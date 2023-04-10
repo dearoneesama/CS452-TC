@@ -123,3 +123,67 @@ TEST_CASE("find_path usage", "find_path") {
     REQUIRE(seg3_dist == 1009);
   }
 }
+
+TEST_CASE("walk_sensor nonsegment", "[walk_sensor]") {
+  auto const *E12 = tracks::valid_nodes().at("E12"),
+             *D11 = tracks::valid_nodes().at("D11"),
+             *C16 = tracks::valid_nodes().at("C16");
+
+  SECTION("dist is too small") {
+    auto result = tracks::walk_sensor(E12, 0, 30, {{ 7, tracks::switch_dir_t::S }});
+    REQUIRE(result.size() == 2);
+    REQUIRE(result[0] == E12);
+    REQUIRE(result[1] == D11);
+  }
+
+  SECTION("offset is big to cover 3 sensors") {
+    auto result = tracks::walk_sensor(E12, 270, 30, {{ 7, tracks::switch_dir_t::S }});
+    REQUIRE(result.size() == 3);
+    REQUIRE(result[0] == E12);
+    REQUIRE(result[1] == D11);
+    REQUIRE(result[2] == C16);
+  }
+}
+
+TEST_CASE("walk_sensor on path segment", "[walk_sensor]") {
+  auto const *D6 = tracks::valid_nodes().at("D6"),
+             *D15 = tracks::valid_nodes().at("D15"),
+             *E10 = tracks::valid_nodes().at("E10"),
+             *E13 = tracks::valid_nodes().at("E13"),
+             *MR9 = tracks::valid_nodes().at("MR9"),
+             *BR8 = tracks::valid_nodes().at("BR8");
+  tracks::node_path_segment_vec_t seg1 = {
+    D6, MR9, BR8, E10, E13,
+  };
+
+  SECTION("dist is small to cover next sensor only") {
+    auto result = tracks::walk_sensor(0, 0, 30, seg1, {});
+    REQUIRE(result.size() == 2);
+    REQUIRE(result[0] == D6);
+    REQUIRE(result[1] == E10);
+  }
+
+  SECTION("dist is small to cover next sensor only, with j") {
+    auto result = tracks::walk_sensor(3, 0, 30, seg1, {});
+    REQUIRE(result.size() == 2);
+    REQUIRE(result[0] == E10);
+    REQUIRE(result[1] == E13);
+  }
+
+  SECTION("dist can be covered by the path") {
+    auto result = tracks::walk_sensor(0, 8, 1000, seg1, {});
+    REQUIRE(result.size() == 3);
+    REQUIRE(result[0] == D6);
+    REQUIRE(result[1] == E10);
+    REQUIRE(result[2] == E13);
+  }
+
+  SECTION("dist cannot be covered by the path") {
+    auto result = tracks::walk_sensor(0, 10, 1000, seg1, {{ 17, tracks::switch_dir_t::C}});
+    REQUIRE(result.size() == 4);
+    REQUIRE(result[0] == D6);
+    REQUIRE(result[1] == E10);
+    REQUIRE(result[2] == E13);
+    REQUIRE(result[3] == D15);
+  }
+}
