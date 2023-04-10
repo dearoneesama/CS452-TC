@@ -1,7 +1,9 @@
+#include <fpm/math.hpp>
 #include "traffic.hpp"
 #include "kern/user_syscall_typed.hpp"
 #include "ui.hpp"
 #include "traffic_mini_driver.hpp"
+#include "traffic_collision.hpp"
 
 using namespace tracks;
 
@@ -15,10 +17,11 @@ namespace traffic {
       for (auto i : valid_trains()) {
         trains[i].num = {i};
         last_train_sensor_updates[i] = 0;
-        drivers[i] = {&trains[i], &reserved_nodes, tcc, swc};
+        drivers[i] = {&trains[i], &switches, &reserved_nodes, tcc, swc};
       }
       for (auto i : valid_switches()) {
-        switches[i] = switch_dir_t::NONE;
+        switches.status[i] = switch_dir_t::NONE;
+        switches.locks[i] = 0;
       }
       init_reserved_nodes();
     }
@@ -56,6 +59,11 @@ namespace traffic {
       if (cmd.speed == train.cmd) {
         return;
       }
+
+      if (std::find(initialized_trains.begin(), initialized_trains.end(), &train) == initialized_trains.end()) {
+        goto done;
+      }
+
       handle_train_predict(train, current_tick);
 
       if (cmd.speed == 15) {
@@ -68,7 +76,7 @@ namespace traffic {
           train.sensor_snap.pos.offset = 0;
           train.tick_snap.pos.offset = -train.tick_snap.pos.offset;
         } else {
-          auto next_sensor_op = next_sensor(valid_nodes().at(train.tick_snap.pos.name), switches);
+          auto next_sensor_op = next_sensor(valid_nodes().at(train.tick_snap.pos.name), switches.status);
           if (next_sensor_op) {
             // if train is at A+x, after reverse, change it to B+y, where B is next sensor
             // and y is dist-x
@@ -95,13 +103,14 @@ namespace traffic {
         }
       }
 
+    done:
       train.cmd = cmd.speed;
       // package information and send to display controller
       send_train_ui_msg(train);
     }
 
     void handle_switch_cmd(switch_cmd &cmd) {
-      switches.at(cmd.switch_num) = cmd.switch_dir;
+      switches.status.at(cmd.switch_num) = cmd.switch_dir;
       // forward to display controller
       utils::enumed_class msg {
         ui::display_msg_header::SWITCHES,
@@ -161,6 +170,8 @@ namespace traffic {
         }
       }
 
+      static const auto invalid_delta = fp{999999} / 100;
+
       // handle a special case first: train leaves sensor, then reverses and so it comes back!
       if (train_node->reverse == sensor_node) {
         last_train_sensor_updates[train.num] = read.tick;
@@ -173,16 +184,27 @@ namespace traffic {
         }
         reset_snaps();
         // dd and dt are not reportable in this case
-        train.sn_delta_d = train.sn_delta_t = fp{999999} / 100;
+        train.sn_delta_d = train.sn_delta_t = invalid_delta;
         return true;
       }
 
       // error tolerance is the distance from one sensor to next, so if two sensors are not
       // adjacent, then return.
-      auto train_next = next_sensor(train_node, switches);
+      auto train_next = next_sensor(train_node, switches.status);
       // end of track or not expected sensor
       if (!train_next || sensor_node != std::get<0>(*train_next)) {
-        return false;
+        auto sensor_prev = next_sensor(sensor_node->reverse, switches.status);
+        if (!sensor_prev || std::get<0>(*sensor_prev)->reverse != train_node) {
+          return false;
+        }
+        // handle accidental misbranch (train at switch S|C, switch is set to C, but train goes to S)
+        ui::out().send_notice(troll::sformat<60>(
+          "Train {} likely has misbranched at sensor {}.", train.num, etl::string_view{read.sensor}
+        ));
+        last_train_sensor_updates[train.num] = read.tick;
+        train.sitting_on_sensor = true;
+        reset_snaps();
+        return true;
       }
 
       last_train_sensor_updates[train.num] = read.tick;
@@ -208,7 +230,9 @@ namespace traffic {
           const auto alpha = fp{0.7};
           auto &standard_v = train.lo_to_hi ? train_speed(train.num, train.cmd, 0) : train_speed(train.num, train.cmd, 14);
           auto new_v = alpha * train.tick_snap.speed + (fp{1} - alpha) * expected_d / actual_t;
-          train.tick_snap.speed = standard_v = new_v;
+          if (fpm::abs(new_v - train.tick_snap.speed) < train.tick_snap.speed * (fp{1} / 2)) {
+            train.tick_snap.speed = standard_v = new_v;
+          }
         }
       }
 
@@ -310,6 +334,7 @@ namespace traffic {
       train.cmd = old_cmd;
       initialized_trains.erase(found);
       drivers.at(msg).reset();
+      assist.remove_train(msg);
       send_train_ui_msg(train);
     }
 
@@ -323,34 +348,8 @@ namespace traffic {
         return;
       }
 
-      const auto *from_node = valid_nodes().at(train.tick_snap.pos.name);
       const auto *to_node = valid_nodes().at(msg.name);
-      auto &driver = drivers.at(msg.train);
-
-      driver.path = find_path(from_node, to_node, train.tick_snap.pos.offset, msg.offset, reserved_nodes);
-      if (!driver.path) {
-        ui::out().send_notice(troll::sformat<128>(
-          "Path finding for train {} was not possible: {} to {}. Routing failed.",
-          msg.train,
-          ui::stringify_pos(train.tick_snap.pos),
-          ui::stringify_pos(msg)
-        ));
-        return;
-      }
-
-      ui::out().send_notice(troll::sformat<128>(
-        "Path found for train {}: {} to {}. Length is {}.",
-        msg.train,
-        ui::stringify_pos(train.tick_snap.pos),
-        ui::stringify_pos(msg),
-        std::accumulate(driver.path->begin(), driver.path->end(), 0, [](int acc, auto &&seg) {
-          return acc + std::get<1>(seg);
-        })
-      ));
-
-      driver.i = driver.j = 0;
-      driver.state = mini_driver::ENROUTE_ACCEL_TO_START_SEGMENT;
-      driver.dest = { msg.name, msg.offset };
+      drivers.at(msg.train).get_path(to_node, msg.offset);
       send_train_ui_msg(train);
     }
 
@@ -379,15 +378,19 @@ namespace traffic {
     /**
      * timestamps when train activates sensor.
      */
-    etl::unordered_map<int, int, num_trains> last_train_sensor_updates {};
+    etl::unordered_map<int, unsigned, num_trains> last_train_sensor_updates {};
     /**
      * switch statuses.
      */
-    switch_status_t switches {};
+    internal_switch_state switches {};
     /**
      * nodes in reservation that cannot be routed to.
      */
     blocked_track_nodes_t reserved_nodes {};
+    /**
+     * runner for collision avoidance.
+     */
+    collision_avoider assist {&initialized_trains, &drivers, &switches.status};
   };
 
   void traffic_server() {
@@ -433,6 +436,7 @@ namespace traffic {
       case traffic_msg_header::TRAIN_PREDICT:
         state.handle_train_predict(Time(clock_server()));
         state.handle_train_driver();
+        state.assist.perform();
         ReplyValue(request_tid, null_reply);
         break;
       case traffic_msg_header::TRAIN_POS_INIT:
@@ -461,7 +465,7 @@ namespace traffic {
     auto traffic_server = TaskFinder(TRAFFIC_SERVER_TASK_NAME);
     auto clock_server = TaskFinder("clock_server");
     while (true) {
-      Delay(clock_server(), predict_react_interval);
+      DelayUntil(clock_server(), Time(clock_server()) + predict_react_interval);
       SendValue(traffic_server(), traffic_msg_header::TRAIN_PREDICT, null_reply);
     }
   }

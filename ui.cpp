@@ -40,6 +40,22 @@ const char *manual[] = {
   "CTS.",
 };
 
+template<size_t N, size_t I = 0, class Tab, class OC>
+[[noreturn]] std::enable_if_t<I == N, void>
+do_patch_lock(Tab &, OC&, etl::string_view, size_t, size_t, size_t, bool) {
+  __builtin_unreachable();
+}
+
+template<size_t N, size_t I = 0, class Tab, class OC>
+std::enable_if_t<I < N, void>
+do_patch_lock(Tab &tab, OC &takeover, etl::string_view data, size_t idx, size_t row_offset, size_t col_offset, bool is_sensor) {
+  if (idx != 0) {
+    return do_patch_lock<N, I + 1>(tab, takeover, data, idx - 1, row_offset, col_offset, is_sensor);
+  }
+  auto [row, col, patch] = tab.template patch_str<I + 1>(int{!is_sensor}, data);
+  takeover.enqueue(row + row_offset, col + col_offset, patch.data());
+}
+
 void display_controller_task() {
   using namespace troll;
 
@@ -159,8 +175,8 @@ void display_controller_task() {
     takeover.enqueue(row++, col_offset, sv.data());
   }
 
-  auto get_train_patch_idx = [&valid_trains](train_read const &tr) {
-    auto it = std::find(valid_trains.begin(), valid_trains.end(), tr.num);
+  auto get_train_patch_idx = [&valid_trains](int num) {
+    auto it = std::find(valid_trains.begin(), valid_trains.end(), num);
     return it - valid_trains.begin();
   };
 
@@ -192,6 +208,35 @@ void display_controller_task() {
       manual_style::disabler_str()
     );
     takeover.enqueue(manual_row + i, col_offset, str.data());
+  }
+
+  // reservations
+  const char *train_lock_title[2] = { "Reserved sensors", "Locks" };
+  const char *train_lock_elems_dummy[2] = { "", "" };
+  auto train_lock_tab = make_tabulate<2, 9, 20>(
+    static_ansi_style_options<ansi_font::dim>{},
+    tabulate_title_row_args{
+      "Train", train_lock_title, train_lock_title + 2,
+      static_ansi_style_options<ansi_font::bold>{},
+    },
+#define TABULATE_ELEM_ROW_ARGS(I) \
+    tabulate_elem_row_args{ \
+      valid_trains.at(I), train_lock_elems_dummy, \
+      static_ansi_style_options_none \
+    }
+    TABULATE_ELEM_ROW_ARGS(0),
+    TABULATE_ELEM_ROW_ARGS(1),
+    TABULATE_ELEM_ROW_ARGS(2),
+    TABULATE_ELEM_ROW_ARGS(3),
+    TABULATE_ELEM_ROW_ARGS(4),
+    TABULATE_ELEM_ROW_ARGS(5)
+#undef TABULATE_ELEM_ROW_ARGS
+  );
+  constexpr size_t train_lock_row = 25;
+  constexpr size_t train_lock_col = 80;
+  row = train_lock_row;
+  for (auto sv : train_lock_tab) {
+    takeover.enqueue(row++, train_lock_col, sv.data());
   }
 
   utils::enumed_class<display_msg_header, char[256]> message;
@@ -275,7 +320,7 @@ void display_controller_task() {
       case display_msg_header::TRAIN_READ: { // train status update
         ReplyValue(request_tid, null_reply);
         auto &tr = message.data_as<train_read>();
-        auto idx = get_train_patch_idx(tr);
+        auto idx = get_train_patch_idx(tr.num);
         // patch the table
         auto [row1, col1, patch1] = train_tab.patch_str<1>(idx, tr.cmd);
         takeover.enqueue(row1 + train_table_row, col1 + col_offset, patch1.data());
@@ -289,6 +334,14 @@ void display_controller_task() {
         takeover.enqueue(row5 + train_table_row, col5 + col_offset, patch5.data());
         auto [row6, col6, patch6] = train_tab.patch_str<6>(idx, tr.delta_d);
         takeover.enqueue(row6 + train_table_row, col6 + col_offset, patch6.data());
+        break;
+      }
+      case display_msg_header::SENSOR_LOCK:
+      case display_msg_header::SWITCH_LOCK: {
+        ReplyValue(request_tid, null_reply);
+        auto &read = message.data_as<sensor_lock>();
+        auto idx = get_train_patch_idx(read.train);
+        do_patch_lock<vt_type::SIZE>(train_lock_tab, takeover, read.str, idx, train_lock_row, train_lock_col, message.header == display_msg_header::SENSOR_LOCK);
         break;
       }
       case display_msg_header::USER_INPUT: { // user input

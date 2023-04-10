@@ -19,6 +19,8 @@ enum class display_msg_header : uint64_t {
   TIMER_CLOCK_MSG = 't',
   SWITCHES = 'w',
   TRAIN_READ,
+  SENSOR_LOCK,
+  SWITCH_LOCK,
 };
 
 struct timer_clock_t {
@@ -56,6 +58,13 @@ inline etl::string<11> stringify_pos(T const &pos) {
     return troll::sformat<11>("{}+{}", name, pos.offset);
   }
 }
+
+struct sensor_lock {
+  int train;
+  utils::sd_buffer<20> str;
+};
+
+using switch_lock = sensor_lock;
 
 const char * const DISPLAY_CONTROLLER_NAME = "displayc";
 

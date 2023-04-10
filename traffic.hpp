@@ -104,4 +104,11 @@ namespace traffic {
     // train is on the sensor thus spamming lots of sensor reads?
     bool sitting_on_sensor {};
   };
+
+  struct internal_switch_state {
+    tracks::switch_status_t status {};
+    // switch num -> train num
+    // individual mini drivers need to lock switches
+    etl::unordered_map<int, int, tracks::num_switches> locks {};
+  };
 }  // namespace traffic

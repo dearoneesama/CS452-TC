@@ -19,6 +19,7 @@ namespace traffic {
      * dependencies
      */
     internal_train_state *train;  // observer
+    internal_switch_state *switches;  // observer
     tracks::blocked_track_nodes_t *reserved_nodes;  // observer
     train_courier_t *train_courier; // observer
     switch_courier_t *switch_courier; // observer
@@ -28,9 +29,17 @@ namespace traffic {
      */
     etl::optional<tracks::node_path_reversal_ok_t> path {etl::nullopt};
     /**
-     * current node in path.
+     * current node in path. j only tracks sensor node.
      */
     size_t i {}, j {};
+    /**
+     * my demands to switch after passing this sensor.
+     * 
+     * steps: after train passed a sensor j, check if it needs to turn any switches ahead.
+     * if switching is required, compute them and add to this vector.
+     * lock the switches and turn them. after train passed the next sensor, unlock the switches.
+     */
+    etl::vector<std::tuple<int, switch_dir_t>, 4> switch_demands {};
     /**
      * final destination. {} means not set.
      */
@@ -59,6 +68,9 @@ namespace traffic {
       FIX_WAITING_TO_REVERSE_1,
       FIX_RUNNING_BACK,
       FIX_WAITING_TO_REVERSE_2,
+      // interrupted states
+      INTERRUPTED_ROUTE_BREAKING,
+      INTERRUPTED_ROUTE_WAITING_TO_REVERSE,
     } state {};
 
     void reset() {
@@ -67,6 +79,7 @@ namespace traffic {
       dest = {};
       braking_dist = 0;
       state = THINKING;
+      unlock_my_switches();
     }
 
     auto const &segment() const {
@@ -82,20 +95,53 @@ namespace traffic {
 
     void set_speed(int speed);
 
-    void set_switch(int sw, bool is_straight);
+    void set_switch(int sw, switch_dir_t dir);
+
+    void get_switch_demands();
+    void try_switch_on_demand();
+    void unlock_my_switches();
+    void try_advance_path_sensor();
+    void send_switch_locks() const;
 
     void emergency_stop() {
-      dest = {};
-      path = etl::nullopt;
-      state = THINKING;
+      reset();
       set_speed(16);
     }
 
-    void switch_ahead_on_demand();
+    /**
+     * instructs the driver to go to a destination.
+     * 
+     * does not check for already-existing path.
+     */
+    void get_path(const track_node *to, int end_offset, tracks::blocked_track_nodes_t additional_blocked = {});
 
     /**
      * do an action and advances state.
      */
     void perform();
+
+    /**
+     * causes train to either slow down or stop to interrupt the traveling path.
+     * 
+     * target_speed_level needs to be normalized.
+     */
+    void interrupt_path(int target_speed_level);
+
+    /**
+     * instructs driver that road ahead is clear and it can resume its path.
+     */
+    void interrupt_path_clear();
+
+    /**
+     * whether train has a path, but is not moving.
+     */
+    bool stuck_in_a_path() const {
+      return state == INTERRUPTED_ROUTE_BREAKING && train->tick_snap.speed == tracks::fp{};
+    }
+
+    /**
+     * reverses train and route again.
+     */
+    void get_reversed_path();
   };
 }  // namespace traffic
