@@ -2,6 +2,7 @@
 #include "kern/merklin.hpp"
 #include "kern/user_syscall_typed.hpp"
 #include "ui.hpp"
+#include "track_consts.hpp"
 #include "generic/utils.hpp"
 
 namespace tcmd {
@@ -30,7 +31,7 @@ void switch_task() {
       continue;
     }
     if (request_tid == expire_timer) {
-      if (turn_off_counts && turn_off_counts - 1 == 0) {
+      if (turn_off_counts == 1) {
         --turn_off_counts;
         SendValue(train_controller, tc_msg_header::SWITCH_CMD_PART_2, null_reply);
       } else if (turn_off_counts) {
@@ -63,13 +64,17 @@ void reverse_task() {
 
     buffer.header = tc_msg_header::REVERSE_CMD_PART_1;
 
-    tc_reply reply;
+    char reply[sizeof(int)];
     int replylen = SendValue(train_controller, buffer, reply);
 
     // need to think about what really happens if we send multiple reverse commands
-    if (replylen == 1 && reply == tc_reply::TRAIN_ALREADY_REVERSING) {
+    // it is fine this server is only used for manual commands
+    if (replylen == 1 && *reinterpret_cast<tc_reply *>(reply) == tc_reply::TRAIN_ALREADY_REVERSING) {
     } else {
-      DelayUntil(clock_server(), Time(clock_server()) + 300); // 3 seconds or 3000ms
+      auto speed = *reinterpret_cast<int *>(reply);
+      auto ts = tracks::accel_deaccel_time(buffer.data.train, speed);  // s
+      auto delay = int{(std::get<0>(ts) + std::get<1>(ts)) * 100};  // ticks
+      DelayUntil(clock_server(), Time(clock_server()) + delay + 10);
       buffer.header = tc_msg_header::REVERSE_CMD_PART_2;
       SendValue(train_controller, buffer, null_reply);
       DelayUntil(clock_server(), Time(clock_server()) + 100);
@@ -172,12 +177,16 @@ void train_task() {
     switch_directions[i] = switch_dir_t::NONE;
   }
 
-  auto send_train_speed = [&train_speeds, &merklin_tx, &traffic_task, &request_tid] (int train_num, int speed) {
+  auto send_train_speed = [&train_speeds, &merklin_tx, &traffic_task, &request_tid] (int train_num, int speed, bool reply_speed = false) {
     Putc(merklin_tx(), 1, (char)speed);
     Putc(merklin_tx(), 1, (char)train_num);
 
-    // track task may send cmds back to me so unblock it first
-    ReplyValue(request_tid, tc_reply::OK);
+    if (reply_speed) {
+      ReplyValue(request_tid, speed);
+    } else {
+      // track task may send cmds back to me so unblock it first
+      ReplyValue(request_tid, tc_reply::OK);
+    }
 
     utils::enumed_class traffic_msg {
       traffic::traffic_msg_header::TRAIN_SPEED_CMD,
@@ -196,7 +205,7 @@ void train_task() {
         int train_num = cmd.train;
 
         if (!is_train_reversing[train_num]) {
-          send_train_speed(train_num, train_speeds[train_num] >= 16 ? 16 : 0);
+          send_train_speed(train_num, train_speeds[train_num] >= 16 ? 16 : 0, true);
           is_train_reversing[train_num] = true;
         } else {
           ReplyValue(request_tid, tc_reply::TRAIN_ALREADY_REVERSING);

@@ -111,6 +111,7 @@ void display_controller_task() {
   for (auto sv : sensor_tab) {
     takeover.enqueue(row++, col_offset, sv.data());
   }
+  int last_sensor_redraw = 0;
 
   // train reads
   auto &valid_trains = tracks::valid_trains();
@@ -256,13 +257,16 @@ void display_controller_task() {
           takeover.enqueue(row + sensor_table_row, col + col_offset, patch.data());
         } else {
           sensor_reads.push(data);
-          // redraw table
-          sensor_read_title_it.reset_src_iterator(sensor_reads.rbegin(), sensor_reads.rend());
-          sensor_read_tick_it.reset_src_iterator(sensor_reads.rbegin(), sensor_reads.rend());
-          sensor_tab.reset_src_iterator(sensor_read_title_it.begin(), sensor_read_title_it.end(), sensor_read_tick_it.begin());
-          row = sensor_table_row;
-          for (auto sv : sensor_tab) {
-            takeover.enqueue(row++, col_offset, sv.data());
+          if (data.tick - last_sensor_redraw > 25) {
+            // redraw table
+            sensor_read_title_it.reset_src_iterator(sensor_reads.rbegin(), sensor_reads.rend());
+            sensor_read_tick_it.reset_src_iterator(sensor_reads.rbegin(), sensor_reads.rend());
+            sensor_tab.reset_src_iterator(sensor_read_title_it.begin(), sensor_read_title_it.end(), sensor_read_tick_it.begin());
+            row = sensor_table_row;
+            for (auto sv : sensor_tab) {
+              takeover.enqueue(row++, col_offset, sv.data());
+            }
+            last_sensor_redraw = data.tick;
           }
         }
         ReplyValue(request_tid, reply);

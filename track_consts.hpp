@@ -54,6 +54,11 @@ namespace tracks {
   std::tuple<int, int> accel_deaccel_distance(int train, int steady_speed_level);
 
   /**
+   * time required for acceleration and braking.
+   */
+  std::tuple<fp, fp> accel_deaccel_time(int train, int steady_speed_level);
+
+  /**
    * find a suitable speed level such that train can accelerate and brake, while the total
    * distance for them is less than or equal to `distance`.
    * 

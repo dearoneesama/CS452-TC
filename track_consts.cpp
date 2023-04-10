@@ -206,9 +206,23 @@ namespace tracks {
     auto v = train_speed(train, steady_speed_level, 0);
     auto a_accel = train_acceleration(train, steady_speed_level, 0);
     auto a_deaccel = train_acceleration(train, 0, steady_speed_level);
+    if (a_accel == fp{}) {
+      return { 0, 0 };
+    }
     // v^2 = 2as
     auto vvd2 = (v * v) / 2;
     return { int{vvd2 / a_accel}, int{vvd2 / a_deaccel} };
+  }
+
+  std::tuple<fp, fp> accel_deaccel_time(int train, int steady_speed_level) {
+    auto v = train_speed(train, steady_speed_level, 0);
+    auto a_accel = train_acceleration(train, steady_speed_level, 0);
+    auto a_deaccel = train_acceleration(train, 0, steady_speed_level);
+    if (a_accel == fp{}) {
+      return { fp{}, fp{} };
+    }
+    // v = at
+    return { v / a_accel, v / a_deaccel };
   }
 
   int find_max_speed_level_for_dist(int train, int distance) {

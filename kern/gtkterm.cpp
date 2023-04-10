@@ -24,7 +24,7 @@ void gtkterm_txnotifier() {
   }
 }
 
-static constexpr size_t MAX_QUEUED_CHARS = 1024*10;
+static constexpr size_t MAX_QUEUED_CHARS = 1024*30;
 
 void gtkterm_rxserver() {
   RegisterAs(GTK_RX_SERVER_NAME);
