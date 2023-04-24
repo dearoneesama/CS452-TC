@@ -125,12 +125,12 @@ namespace traffic {
      * 
      * target_speed_level needs to be normalized.
      */
-    void interrupt_path(int target_speed_level);
+    bool interrupt_path(int target_speed_level);
 
     /**
      * instructs driver that road ahead is clear and it can resume its path.
      */
-    void interrupt_path_clear();
+    bool interrupt_path_clear();
 
     /**
      * whether train has a path, but is not moving.
@@ -142,6 +142,6 @@ namespace traffic {
     /**
      * reverses train and route again.
      */
-    void get_reversed_path();
+    bool get_reversed_path();
   };
 }  // namespace traffic

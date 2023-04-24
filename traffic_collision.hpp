@@ -33,7 +33,7 @@ namespace traffic {
     void get_new_sensor_locks();
     void send_sensor_locks() const;
 
-    void handle_train(mini_driver &driver);
+    bool handle_train(mini_driver &driver);
 
   public:
     /**

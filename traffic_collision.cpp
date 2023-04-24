@@ -40,7 +40,8 @@ namespace traffic {
     }
   }
 
-  void collision_avoider::handle_train(mini_driver &driver) {
+  bool collision_avoider::handle_train(mini_driver &driver) {
+    bool changed = false;
     auto &tr = *driver.train;
     auto &my_locks = train_node_locks.at(tr.num);
 
@@ -48,21 +49,22 @@ namespace traffic {
 
     // find conflicting train
     for (auto &[num, their_locks] : train_node_locks) {
-      if (num == tr.num) {
+      if (num == tr.num || !their_locks.size()) {
         continue;
       }
-      for (auto *their_node : their_locks) {
-        for (auto *node : my_locks) {
-          if (node == their_node) {
-            ui::out().send_notice(troll::sformat<40>("Train {} might rear-end {}.", tr.num, num));
-            tr2_rearended = drivers->at(num).train;
-          } else if (node == their_node->reverse) {
-            ui::out().send_notice(troll::sformat<40>("Train {} might head on with {}.", tr.num, num));
-            tr2_opposite = drivers->at(num).train;
-          }
-          if (tr2_rearended && tr2_opposite) {
-            break;
-          }
+      for (auto *node : my_locks) {
+        // front is behind node, back is in front of node
+        if (node == their_locks.front()) {
+          //ui::out().send_notice(troll::sformat<40>("Train {} might rear-end {}.", tr.num, num));
+          Yield();
+          tr2_rearended = drivers->at(num).train;
+        } else if (node == their_locks.back()->reverse) {
+          //ui::out().send_notice(troll::sformat<40>("Train {} might head on with {}.", tr.num, num));
+          Yield();
+          tr2_opposite = drivers->at(num).train;
+        }
+        if (tr2_rearended && tr2_opposite) {
+          break;
         }
       }
     }
@@ -70,11 +72,11 @@ namespace traffic {
     bool was_clear = cleared_trains.count(tr.num);
     if (!tr2_rearended && !tr2_opposite && !was_clear) {
       // no collision possible, try clear the path if driver is interrupted
-      driver.interrupt_path_clear();
+      changed |= driver.interrupt_path_clear();
       cleared_trains.insert(tr.num);
-      return;
+      return changed;
     } else if (!tr2_rearended && !tr2_opposite) {
-      return;
+      return changed;
     }
     cleared_trains.erase(tr.num);
 
@@ -82,20 +84,21 @@ namespace traffic {
     if (tr2_rearended) {
       // slow down using a decrement
       auto curr_speed = tr.cmd >= 16 ? tr.cmd - 16 : tr.cmd;
-      driver.interrupt_path(etl::max(0, curr_speed - 2));
+      changed |= driver.interrupt_path(etl::max(0, curr_speed - 2));
     }
     // head on
     if (tr2_opposite) {
       // stop!
       // the other guy will stop too
-      driver.interrupt_path(0);
+      changed |= driver.interrupt_path(0);
     }
     // both stopped
     auto *tr2 = tr2_rearended ? tr2_rearended : tr2_opposite;
     if (tr2->tick_snap.speed == fp{} && driver.stuck_in_a_path()) {
       // reverse me to clear the other
-      driver.get_reversed_path();
+      changed |= driver.get_reversed_path();
     }
+    return changed;
   }
 
   void collision_avoider::perform() {
@@ -103,7 +106,10 @@ namespace traffic {
     send_sensor_locks();
     for (auto *tr : *initialized_trains) {
       auto &dr = drivers->at(tr->num);
-      handle_train(dr);
+      if (handle_train(dr)) {
+        get_new_sensor_locks();
+        send_sensor_locks();
+      }
     }
   }
 }  // namespace traffic

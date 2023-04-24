@@ -287,9 +287,9 @@ namespace traffic {
     }
   }
 
-  void mini_driver::interrupt_path(int target_speed_level) {
+  bool mini_driver::interrupt_path(int target_speed_level) {
     if (train->tick_snap.speed == fp{}) {
-      return;
+      return false;
     }
     if (target_speed_level == 0) {
       ui::out().send_notice(troll::sformat<60>(
@@ -311,11 +311,12 @@ namespace traffic {
         braking_dist = std::get<1>(accel_deaccel_distance(train->num, target_speed_level));
       }
     }
+    return true;
   }
 
-  void mini_driver::interrupt_path_clear() {
+  bool mini_driver::interrupt_path_clear() {
     if (!path || (state != ENROUTE_RUNNING_SEGMENT && state != INTERRUPTED_ROUTE_BREAKING)) {
-      return;
+      return false;
     }
     auto speed = find_max_speed_level_for_dist(train->num, segment_dist_left());
     auto new_braking_dist = std::get<1>(accel_deaccel_distance(train->num, speed));
@@ -329,15 +330,17 @@ namespace traffic {
       set_speed(speed + 16);
     }
     state = ENROUTE_RUNNING_SEGMENT;
+    return true;
   }
 
-  void mini_driver::get_reversed_path() {
+  bool mini_driver::get_reversed_path() {
     if (!stuck_in_a_path() || state == INTERRUPTED_ROUTE_WAITING_TO_REVERSE) {
-      return;
+      return false;
     }
     unlock_my_switches();
     reverse_timer = 0;
     set_speed(15);
     state = INTERRUPTED_ROUTE_WAITING_TO_REVERSE;
+    return true;
   }
 }  // namespace traffic
