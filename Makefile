@@ -15,6 +15,7 @@ OUTPUT := build
 
 ETL_INCLUDE:=thirdparty/etl/include
 FPM_INCLUDE:=thirdparty/fpm/include
+TROLL_INCLUDE:=thirdparty/troll-string-util/include
 
 # dbg
 ifeq ($(IS_TRACK_A), 1)
@@ -42,7 +43,7 @@ OPTLVL=-O3
 CFLAGS:= $(OPTLVL) -pipe -static $(WARNINGS) -ffreestanding -nostartfiles \
 	-mcpu=$(ARCH) -static-pie -mstrict-align -fno-builtin -mgeneral-regs-only \
 	-fno-rtti -fno-exceptions -nostdlib -lgcc -fno-use-cxa-atexit -fno-threadsafe-statics -std=gnu++17 \
-	-isystem $(ETL_INCLUDE) -isystem $(FPM_INCLUDE) -DBENCHMARKING=$(BENCHMARKING) \
+	-isystem $(ETL_INCLUDE) -isystem $(FPM_INCLUDE) -isystem $(TROLL_INCLUDE) -DBENCHMARKING=$(BENCHMARKING) \
 	$(IS_TRACK_A_CFLAG) $(NO_CTS_CFLAG) $(DEBUG_PI_CFLAG)
 
 # -Wl,option tells g++ to pass 'option' to the linker with commas replaced by spaces

@@ -7,3 +7,6 @@
 [submodule "thirdparty/fpm"]
 	path = thirdparty/fpm
 	url = https://github.com/dearoneesama/fpm
+[submodule "thirdparty/troll-string-util"]
+	path = thirdparty/troll-string-util
+	url = https://github.com/dearoneesama/troll-string-util

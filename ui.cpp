@@ -1,10 +1,11 @@
 #include <etl/circular_buffer.h>
 #include <etl/fixed_iterator.h>
+#include <troll_util/format_scan.hpp>
+#include <troll_util/utils.hpp>
 #include "ui.hpp"
 #include "kern/gtkterm.hpp"
 #include "kern/kstddefs.hpp"
 #include "tcmd.hpp"
-#include "generic/format_scan.hpp"
 #include "kern/rpi.hpp"
 #include "track_consts.hpp"
 
@@ -66,7 +67,7 @@ void display_controller_task() {
 
   // how many rows are reserved; 59th row (0-based) is the location for naive Putc
   constexpr int user_rows = 64;
-  OutputControl<150, user_rows> takeover;
+  output_control<150, user_rows> takeover;
 
   // headline
   using title_style = static_ansi_style_options<

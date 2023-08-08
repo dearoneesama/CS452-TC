@@ -1,6 +1,6 @@
 #include <etl/priority_queue.h>
+#include <troll_util/format.hpp>
 #include "track_graph.hpp"
-#include "generic/format.hpp"
 
 namespace tracks {
   etl::optional<std::tuple<const track_node *, int>>
